@@ -6,7 +6,6 @@ from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 import asyncio
 
 import websockets
-import time
 from datetime import datetime
 
 import subprocess
@@ -14,7 +13,7 @@ import time
 import hashlib
 from dotenv import load_dotenv
 
-load_dotenv()  # reads variables from a .env file and sets them in os.environ
+load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
 
 # Code of your application, which uses environment variables (e.g. from `os.environ` or
 # `os.getenv`) as if they came from the actual environment.
@@ -27,19 +26,19 @@ load_dotenv()  # reads variables from a .env file and sets them in os.environ
 
 APP_ID = os.getenv("APP_ID") # ID of ther bot
 APP_SECRET = os.getenv("APP_SECRET") # Token of the bot
-USER_SCOPE = os.getenv("USER_SCOPE") # Permissions the chatbot should have
+USER_SCOPE = USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT] # Permissions the chatbot should have
 TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 
-WATCHLIST = os.getenv("WATCHLIST")  # Users to be Monitored
+WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback"]  # Users to be Monitored
 
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 PUSH_INTERVAL = os.getenv("PUSH_INTERVAL") # The interval in which the Script pushes data to the githhub repository
 
 
-print("Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
+print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 
 
 async def main():
