@@ -32,11 +32,12 @@ TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 
-WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback"]  # Users to be Monitored
+WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","friesenjunge226_live"]  # Users to be Monitored
 
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 PUSH_INTERVAL = 300 # The interval in which the Script pushes data to the githhub repository
 
+last_hash = 0
 
 print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 
@@ -44,13 +45,15 @@ print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 async def main():
     task1 = asyncio.create_task(twitch_irc()) # Start the IRC Connection
     task2 = asyncio.create_task(run()) # Start the Chatbot
-    task3 = asyncio.create_task(git_push())  # UNCOMMENT FOR MOD COUNTER (UNFINISHED) # Start the uploader to GitHub
+    #task3 = asyncio.create_task(git_push()) # Start the uploader to GitHub
     #task4= asyncio.create_task(programme()) # Start oher Programs
     
-    await asyncio.gather(task1, task2, task3) # Run the things specified above
+    await asyncio.gather(task1,task2) # Run the things specified above
 
 
-def log_event(user, event_type):
+
+
+async def log_event(user, event_type):
     """Schreibt JOIN/PART in eine Datei."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOGFILE, "a", encoding="utf-8") as f:
@@ -235,54 +238,36 @@ async def run():
     # we are done with our setup, lets start this bot up!
     chat.start()
 
-    # lets run till we press enter in the console
-    try:
-        input('[TwitchAPI] press ENTER to stop \n')
-    finally:
-        # now we can close the chat bot and the twitch api client
-        chat.stop()
-        await twitch.close()
-
-
+    await git_push()
 
 async def git_push():
-    global last_hash
-
     while True:
-        await asyncio.sleep(int(PUSH_INTERVAL))
-
+        global last_hash
         current_hash = get_file_hash(LOGFILE)
-
-        # Set Hash None
-        if last_hash is None:
+            
+        if last_hash == 0:
             last_hash = current_hash
             continue
-
-        # chaeck for changes
+            
         if current_hash == last_hash:
-            print("[GIT] No changes detected")
             continue
+        else:
+            print("[GIT] Pushing to origin main")
+            # Commit Changes to Origin main
+            subprocess.run(["git", "add", LOGFILE])
+            subprocess.run(["git", "commit", "-m", f"Auto update {datetime.now()}"])
+            subprocess.run(["git", "push", "origin", "main"])
 
-        print("[GIT] Änderungen erkannt – pushe…")
-
-        # Commit Changes to Origin main
-        subprocess.run(["git", "commit", "-m", f"Auto update {datetime.now()}"])
-        subprocess.run(["git", "push", "origin", "main"])
-
-        last_hash = current_hash
+            last_hash = current_hash
 
 
-# Set hash None
-last_hash = None
-
-def get_file_hash(path):
+async def get_file_hash(path):
     """Returns SHA256 hash of a file or None if missing."""
     try:
         with open(path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
     except FileNotFoundError:
         return None
-
 
 
 async def programme():
@@ -293,5 +278,3 @@ async def programme():
 
 # run setup
 asyncio.run(main())
-
-
