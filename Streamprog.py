@@ -35,7 +35,7 @@ BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback"]  # Users to be Monitored
 
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
-PUSH_INTERVAL = os.getenv("PUSH_INTERVAL") # The interval in which the Script pushes data to the githhub repository
+PUSH_INTERVAL = 300 # The interval in which the Script pushes data to the githhub repository
 
 
 print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
@@ -44,10 +44,10 @@ print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 async def main():
     task1 = asyncio.create_task(twitch_irc()) # Start the IRC Connection
     task2 = asyncio.create_task(run()) # Start the Chatbot
-    #task3 = asyncio.create_task(git_push())  # UNCOMMENT FOR MOD COUNTER (UNFINISHED) # Start the uploader to GitHub
+    task3 = asyncio.create_task(git_push())  # UNCOMMENT FOR MOD COUNTER (UNFINISHED) # Start the uploader to GitHub
     #task4= asyncio.create_task(programme()) # Start oher Programs
     
-    await asyncio.gather(task1, task2) # Run the things specified above
+    await asyncio.gather(task1, task2, task3) # Run the things specified above
 
 
 def log_event(user, event_type):
@@ -67,7 +67,7 @@ async def twitch_irc():
         await ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
         await ws.send(f"JOIN #{TARGET_CHANNEL}")
 
-        print("Verbunden… lausche auf Events.")
+        print("[IRC] Verbunden")
 
         while True:
             msg = await ws.recv()
@@ -98,14 +98,14 @@ async def twitch_irc():
 
 # called on bot start
 async def on_ready(ready_event: EventData):
-    print('Bot is ready for work, joining channels')
+    print('[TwitchAPI] Bot is ready for work, joining channels...')
     await ready_event.chat.join_room(TARGET_CHANNEL)
     # bot init
 
 
 # this will be called whenever a message in a channel was send by either the bot OR another user
 async def on_message(msg: ChatMessage):
-    print(f'in {msg.room.name}, {msg.user.name} said: {msg.text}')
+    print(f'[TwitchAPI] in {msg.room.name}, {msg.user.name} said: {msg.text}')
     
 
 
@@ -166,10 +166,19 @@ async def whatsapp(cmd: ChatCommand):
     await cmd.reply("Ich hab nun nen Channel :3 Kommt gerne rein! Es ist alles anonym -> https://whatsapp.com/channel/0029Vb68Cm71Xquc5Ay6qv2y")
     
 async def lurk(cmd: ChatCommand):
-    await cmd.reply("{cmd.user.name} ist nun im lurk. Viel spaß :D")
+    await cmd.reply(f"@{cmd.user.name} ist nun im lurk. Viel spaß :D")
     
 async def unlurk(cmd: ChatCommand):
-    await cmd.reply("{cmd.user.name} ist wieder im Chat. Halli :D")
+    await cmd.reply(f"@{cmd.user.name} ist wieder im Chat. Halli :D")
+    
+async def pain(cmd: ChatCommand):
+    await cmd.reply(f"@{cmd.user.name} will nicht mehr. @{cmd.user.name} hält das alles nicht mehr aus. @{cmd.user.name} hasst gerade alles Madge .")
+
+async def aua(cmd: ChatCommand):
+    await cmd.reply(f"@{cmd.user.name} hat gerade große Schmerzen")
+    
+async def test(cmd: ChatCommand):
+    await cmd.reply(f"Test, Test. eins, zwei, drei. Test erfolgreich")
 
     
 # this is where we set up the bot
@@ -182,7 +191,9 @@ async def run():
 
     # create chat instance
     chat = await Chat(twitch)
-
+    
+    print(f"[TwitchAPT] Startup Finished. Connected.")
+    
     # register the handlers for the events you want
 
     # listen to when the bot is done starting up and ready to join channels
@@ -215,6 +226,9 @@ async def run():
     chat.register_command("wa", whatsapp)
     chat.register_command("lurk", lurk)
     chat.register_command("unlurk", unlurk)
+    chat.register_command("pain", pain)
+    chat.register_command("aua", aua)
+    chat.register_command("test", test)
 
     
     
@@ -223,7 +237,7 @@ async def run():
 
     # lets run till we press enter in the console
     try:
-        input('press ENTER to stop \n')
+        input('[TwitchAPI] press ENTER to stop \n')
     finally:
         # now we can close the chat bot and the twitch api client
         chat.stop()
@@ -235,30 +249,30 @@ async def git_push():
     global last_hash
 
     while True:
-        await asyncio.sleep(int(PUSH_INTERVAL))  # async sleep!
+        await asyncio.sleep(int(PUSH_INTERVAL))
 
         current_hash = get_file_hash(LOGFILE)
 
-        # Beim ersten Mal einfach Hash setzen
+        # Set Hash None
         if last_hash is None:
             last_hash = current_hash
             continue
 
-        # Wenn Datei unverändert → nichts tun
+        # chaeck for changes
         if current_hash == last_hash:
+            print("[GIT] No changes detected")
             continue
 
         print("[GIT] Änderungen erkannt – pushe…")
 
-        # Änderungen committen
-        subprocess.run(["git", "add", LOGFILE])
+        # Commit Changes to Origin main
         subprocess.run(["git", "commit", "-m", f"Auto update {datetime.now()}"])
         subprocess.run(["git", "push", "origin", "main"])
 
         last_hash = current_hash
 
 
-# Track last file hash
+# Set hash None
 last_hash = None
 
 def get_file_hash(path):
@@ -273,7 +287,7 @@ def get_file_hash(path):
 
 async def programme():
     os.system('C:\\Users\\DerFriese\\AppData\\Local\\Programs\\moobot-assistant\\Moobot-Assistant.exe')
-    os.system('C:\\Users\\Public\\Desktop\\OBSStudio.lnk')
+    os.system("C:\\Users\DerFriese\\Desktop\\OBS.lnk")
     
 
 
