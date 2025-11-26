@@ -4,14 +4,12 @@ from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 import asyncio
-
-import websockets
 from datetime import datetime
-
 import subprocess
-import time
 import hashlib
 from dotenv import load_dotenv
+import aiohttp
+import os
 
 load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
 
@@ -32,10 +30,12 @@ TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 
-WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","friesenjunge226_live"]  # Users to be Monitored
+WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback"]  # Users to be Monitored
 
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 PUSH_INTERVAL = 300 # The interval in which the Script pushes data to the githhub repository
+BROADCASTER_ID = os.getenv("BROADCASTER_ID")
+
 
 last_hash = 0
 
@@ -43,59 +43,58 @@ print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 
 
 async def main():
-    task1 = asyncio.create_task(twitch_irc()) # Start the IRC Connection
+    task1 = asyncio.create_task(log_mods()) # Start the IRC Connection
     task2 = asyncio.create_task(run()) # Start the Chatbot
-    #task3 = asyncio.create_task(git_push()) # Start the uploader to GitHub
-    #task4= asyncio.create_task(programme()) # Start oher Programs
+    task3=asyncio.create_task(programme()) # Start oher Programs
     
-    await asyncio.gather(task1,task2) # Run the things specified above
-
-
-
+    await asyncio.gather(task1,task2,task3) # Run the things specified above
 
 async def log_event(user, event_type):
-    """Schreibt JOIN/PART in eine Datei."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOGFILE, "a", encoding="utf-8") as f:
         f.write(f"[{ts}] {user} {event_type}\n")
         
-async def twitch_irc():
-    
-    uri = "wss://irc-ws.chat.twitch.tv:443"
-    async with websockets.connect(uri) as ws:
+async def get_chatters():
+    url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={BROADCASTER_ID}&moderator_id={BROADCASTER_ID}"
+    headers = {
+        "Client-ID": APP_ID,
+        "Authorization": f"Bearer {TOKEN}"
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as r:
+            data = await r.json()
+            return [u["user_login"].lower() for u in data.get("data", [])]
+        
 
-        # Login
-        await ws.send(f"PASS {TOKEN}")
-        await ws.send(f"NICK {BOTNAME}")
-        await ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
-        await ws.send(f"JOIN #{TARGET_CHANNEL}")
 
-        print("[IRC] Verbunden")
+mod_status = {mod.lower(): False for mod in WATCHLIST}  # False = offline, True = online
 
-        while True:
-            msg = await ws.recv()
-            # print("<<<", msg)  # Debug falls du willst
+async def log_mods():
+    global last_hash
+    while True:
+        chatters = await get_chatters() # Get mods in chat
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # get datetime now
 
-            # Ping-Pong
-            if msg.startswith("PING"):
-                await ws.send("PONG :tmi.twitch.tv")
-                continue
+        for mod in WATCHLIST:
+            mod_lower = mod.lower()
+            online = mod_lower in chatters
 
-            # JOIN
-            if "JOIN #" in msg:
-                nick = msg.split("!")[0][1:].lower()
+            # Write if status has changed
+            if online != mod_status[mod_lower]:
+                event = "JOIN" if online else "PART"
+                log_line = f"[{ts}] {mod} {event}\n"
 
-                if nick in WATCHLIST:
-                    print(f"[JOIN] {nick}")
-                    log_event(nick, "JOIN")
+                with open(LOGFILE, "a", encoding="utf-8") as f:
+                    f.write(log_line)
+                    print(f"[LOG] {log_line.strip()}")
+                    await asyncio.sleep(1)
+                    subprocess.run(["git", "add", LOGFILE])
+                    subprocess.run(["git", "commit", "-m", f"Auto update {datetime.now()}"])
+                    subprocess.run(["git", "push", "origin", "main"])
 
-            # PART
-            if "PART #" in msg:
-                nick = msg.split("!")[0][1:].lower()
+                mod_status[mod_lower] = online  # Log status
 
-                if nick in WATCHLIST:
-                    print(f"[PART] {nick}")
-                    log_event(nick, "PART")
+        await asyncio.sleep(5)
 
 
 
@@ -238,41 +237,11 @@ async def run():
     # we are done with our setup, lets start this bot up!
     chat.start()
 
-    await git_push()
-
-async def git_push():
-    while True:
-        global last_hash
-        current_hash = get_file_hash(LOGFILE)
-            
-        if last_hash == 0:
-            last_hash = current_hash
-            continue
-            
-        if current_hash == last_hash:
-            continue
-        else:
-            print("[GIT] Pushing to origin main")
-            # Commit Changes to Origin main
-            subprocess.run(["git", "add", LOGFILE])
-            subprocess.run(["git", "commit", "-m", f"Auto update {datetime.now()}"])
-            subprocess.run(["git", "push", "origin", "main"])
-
-            last_hash = current_hash
-
-
-async def get_file_hash(path):
-    """Returns SHA256 hash of a file or None if missing."""
-    try:
-        with open(path, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
-    except FileNotFoundError:
-        return None
 
 
 async def programme():
-    os.system('C:\\Users\\DerFriese\\AppData\\Local\\Programs\\moobot-assistant\\Moobot-Assistant.exe')
-    os.system("C:\\Users\DerFriese\\Desktop\\OBS.lnk")
+    os.startfile('C:\\Users\\DerFriese\\AppData\\Local\\Programs\\moobot-assistant\\Moobot-Assistant.exe')
+    os.startfile("C:\\Users\DerFriese\\Desktop\\OBS.lnk")
     
 
 
