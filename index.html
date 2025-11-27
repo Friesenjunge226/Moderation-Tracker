@@ -1,18 +1,253 @@
-<!DOCTYPE html>
-<html>
-    <head>
-    <meta name="google-adsense-account" content="ca-pub-1673387221510697">
-    <meta charset="UTF-8" />
-    <title>iFixit Daten mit Minecraft Skin</title>
-    <link rel="icon" href="logo.png" type="image/png"/>
-    </head>
-    <style>
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Moderator Dashboard — Präsenz</title>
 
-    </style>
-    <script>
+<!-- Einfaches, modernes Styling -->
+<style>
+  :root{
+    --bg:#0f1724; --card:#0b1220; --muted:#94a3b8; --accent:#16a34a;
+    --danger:#ef4444; --glass: rgba(255,255,255,0.03);
+    --card-radius:14px;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color: #e6eef8;
+  }
+  html,body{height:100%; margin:0; background:linear-gradient(180deg,#071025 0%, #071829 60%); color:var(--muted);}
+  .wrap{max-width:1100px; margin:28px auto; padding:18px;}
+  header{display:flex; align-items:center; gap:16px; margin-bottom:20px;}
+  h1{margin:0; color:#fff; font-size:20px;}
+  .meta{color:var(--muted); font-size:13px}
+  .controls{margin-left:auto; display:flex; gap:8px; align-items:center;}
+  button {background:var(--glass); border:1px solid rgba(255,255,255,0.03); color:var(--muted); padding:8px 12px; border-radius:8px; cursor:pointer}
+  button.primary{background:linear-gradient(90deg,#10b981,#059669); color:#fff; border:0}
+  .grid{display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:14px;}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:var(--card-radius); padding:14px; box-shadow: 0 6px 18px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.03)}
+  .name{font-weight:700; color:#fff; font-size:16px}
+  .status{display:inline-flex; gap:8px; align-items:center; font-weight:700; padding:6px 10px; border-radius:999px; font-size:13px}
+  .dot{width:10px; height:10px; border-radius:50%}
+  .online{background:var(--accent)}
+  .offline{background:var(--danger)}
+  .small{font-size:12px; color:var(--muted)}
+  .row{display:flex; justify-content:space-between; align-items:center; gap:10px}
+  .stat{margin-top:10px; font-size:13px; color:var(--muted)}
+  footer{margin-top:18px; color:var(--muted); font-size:13px}
+  .bignum{font-weight:800; color:#fff; font-size:18px}
+  .muted{color:var(--muted)}
+  .loader{opacity:0.6; font-size:13px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Moderator-Dashboard</h1>
+        <div class="meta">Zeigt, wann Moderatoren im Chat sind — automatische Aktualisierung</div>
+      </div>
 
-    </script>
-    <body>
+      <div class="controls">
+        <div class="muted">Refresh:</div>
+        <select id="refreshSelect">
+          <option value="5">5s</option>
+          <option value="10" selected>10s</option>
+          <option value="30">30s</option>
+          <option value="60">60s</option>
+        </select>
+        <button id="forceBtn" class="primary">Jetzt aktualisieren</button>
+      </div>
+    </header>
 
-    </body>
+    <section>
+      <div id="summary" class="card" style="margin-bottom:12px;">
+        <div class="row">
+          <div>
+            <div class="bignum" id="onlineCount">–</div>
+            <div class="small muted">Moderatoren online</div>
+          </div>
+          <div class="loader" id="statusText">lade…</div>
+        </div>
+      </div>
+
+      <div id="grid" class="grid">
+        <!-- Karten werden per JS eingefügt -->
+      </div>
+
+      <footer>Data von <span id="sourceUrl"></span>. Seite aktualisiert automatisch.</footer>
+    </section>
+  </div>
+
+<script>
+/*
+  Config:
+  - RAW_URL: öffentliche raw URL zu deiner joins.log (ohne Token)
+  - WATCHLIST: array mit Usernames (kleinschreibung tolerant)
+*/
+const RAW_URL = "https://raw.githubusercontent.com/Friesenjunge226/Moderation-Tracker/main/joins.log";
+const WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback"];
+
+// UI refs
+const grid = document.getElementById("grid");
+const onlineCountEl = document.getElementById("onlineCount");
+const statusText = document.getElementById("statusText");
+document.getElementById("sourceUrl").textContent = RAW_URL;
+
+let refreshInterval = parseInt(document.getElementById("refreshSelect").value, 10);
+let timer = null;
+document.getElementById("refreshSelect").addEventListener("change", (e)=>{
+  refreshInterval = parseInt(e.target.value,10);
+  restartTimer();
+});
+document.getElementById("forceBtn").addEventListener("click", ()=> fetchAndRender());
+
+/* Helper: parse log lines.
+   Expected line format:
+   [YYYY-MM-DD HH:MM:SS] username JOIN
+   [YYYY-MM-DD HH:MM:SS] username PART
+*/
+function parseLog(text){
+  const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  // map user => array of {ts: Date, event: "JOIN"|"PART"}
+  const events = {};
+  for (const line of lines){
+    // naive parse
+    const m = line.match(/^\[([0-9\- :]+)\]\s+(\S+)\s+(JOIN|PART)/);
+    if (!m) continue;
+    const ts = new Date(m[1].replace(" ", "T"));
+    const user = m[2].toLowerCase();
+    const ev = m[3];
+    if (!events[user]) events[user] = [];
+    events[user].push({ts, ev});
+  }
+  return events;
+}
+
+/* Build sessions from events: pairs of JOIN->PART.
+   Returns for each user:
+   { sessions: [{start, end|null}], currentOnline: bool, currentStart: Date|null, totalTodaySeconds: number, lastSeen: Date|null }
+*/
+function buildStatus(eventsByUser){
+  const out = {};
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+
+  for (const u of WATCHLIST.map(x=>x.toLowerCase())){
+    const evs = (eventsByUser[u]||[]).sort((a,b)=>a.ts - b.ts);
+    const sessions = [];
+    let openStart = null;
+    for (const e of evs){
+      if (e.ev === "JOIN"){
+        if (!openStart) openStart = e.ts;
+      } else if (e.ev === "PART"){
+        if (openStart){
+          sessions.push({start: openStart, end: e.ts});
+          openStart = null;
+        } else {
+          // PART without JOIN: ignore or treat as short session before (skip)
+        }
+      }
+    }
+    if (openStart) sessions.push({start: openStart, end: null});
+
+    // compute total today seconds and lastSeen
+    let totalToday = 0;
+    let lastSeen = null;
+    for (const s of sessions){
+      const sStart = s.start;
+      const sEnd = s.end || new Date();
+      // lastSeen is last event time
+      if (!lastSeen || sEnd > lastSeen) lastSeen = sEnd;
+      // clamp to today
+      const from = sStart < todayStart ? todayStart : sStart;
+      if (sEnd > from){
+        totalToday += (sEnd - from) / 1000;
+      }
+    }
+    const currentOnline = sessions.length && sessions[sessions.length-1].end === null;
+    const currentStart = currentOnline ? sessions[sessions.length-1].start : null;
+
+    out[u] = {
+      sessions,
+      currentOnline,
+      currentStart,
+      totalTodaySeconds: Math.round(totalToday),
+      lastSeen
+    };
+  }
+  return out;
+}
+
+/* Format helpers */
+function formatDurationSeconds(sec){
+  if (sec < 60) return `${sec}s`;
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = Math.floor(sec%60);
+  if (h>0) return `${h}h ${m}m`;
+  if (m>0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+function formatDate(d){
+  if (!d) return "—";
+  return d.toLocaleString();
+}
+
+/* Render UI */
+function render(statusMap){
+  grid.innerHTML = "";
+  let onlineCount = 0;
+  for (const mod of WATCHLIST){
+    const key = mod.toLowerCase();
+    const st = statusMap[key] || {currentOnline:false,totalTodaySeconds:0,lastSeen:null,currentStart:null};
+    if (st.currentOnline) onlineCount++;
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="row">
+        <div>
+          <div class="name">${mod}</div>
+          <div class="small muted">Letzte Aktivität: ${formatDate(st.lastSeen)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="status ${st.currentOnline?'' : ''}">
+            <span class="dot ${st.currentOnline ? 'online' : 'offline'}"></span>
+            <div style="display:inline-block; margin-left:8px; color:${st.currentOnline? '#bff7d4' : '#ffdada'}">${st.currentOnline ? 'ONLINE' : 'OFFLINE'}</div>
+          </div>
+        </div>
+      </div>
+      <div class="stat">Aktuelle Session: <strong>${st.currentOnline ? formatDurationSeconds(Math.round((new Date() - st.currentStart)/1000)) : '—'}</strong></div>
+      <div class="stat">Gesamt heute: <strong>${formatDurationSeconds(st.totalTodaySeconds)}</strong></div>
+    `;
+    grid.appendChild(card);
+  }
+  onlineCountEl.textContent = onlineCount;
+  statusText.textContent = `Letzte Aktualisierung: ${new Date().toLocaleTimeString()}`;
+}
+
+/* Main: fetch, parse, render */
+async function fetchAndRender(){
+  try{
+    statusText.textContent = "lade…";
+    const r = await fetch(RAW_URL, {cache: "no-store"});
+    if (!r.ok) throw new Error("Fehler beim Laden: "+r.status);
+    const txt = await r.text();
+    const events = parseLog(txt);
+    const statusMap = buildStatus(events);
+    render(statusMap);
+  }catch(err){
+    statusText.textContent = "Fehler beim Laden";
+    console.error(err);
+  }
+}
+
+/* Timer control */
+function restartTimer(){
+  if (timer) clearInterval(timer);
+  timer = setInterval(fetchAndRender, refreshInterval*1000);
+  fetchAndRender();
+}
+
+/* Init */
+restartTimer();
+</script>
+</body>
 </html>
