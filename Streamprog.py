@@ -10,6 +10,7 @@ import hashlib
 from dotenv import load_dotenv
 import aiohttp
 import os
+import pygame
 
 load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
 
@@ -108,6 +109,10 @@ async def on_ready(ready_event: EventData):
 # this will be called whenever a message in a channel was send by either the bot OR another user
 async def on_message(msg: ChatMessage):
     print(f'[TwitchAPI] in {msg.room.name}, {msg.user.name} said: {msg.text}')
+    pygame.mixer.init()
+    pygame.mixer.music.load("yes.mp3")
+    pygame.mixer.music.play()
+
     
 
 
