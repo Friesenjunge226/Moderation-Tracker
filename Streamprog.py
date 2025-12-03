@@ -6,39 +6,30 @@ from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 import asyncio
 from datetime import datetime
 import subprocess
-import hashlib
 from dotenv import load_dotenv
 import aiohttp
 import os
 import pygame
+from datetime import datetime, time
 
 load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
-
-# Code of your application, which uses environment variables (e.g. from `os.environ` or
-# `os.getenv`) as if they came from the actual environment.
-
-
-
-#Start Moobot and OBS
-
-
 
 APP_ID = os.getenv("APP_ID") # ID of ther bot
 APP_SECRET = os.getenv("APP_SECRET") # Token of the bot
 USER_SCOPE = USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT] # Permissions the chatbot should have
 TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
-
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
-
 WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback"]  # Users to be Monitored
-
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 PUSH_INTERVAL = 300 # The interval in which the Script pushes data to the githhub repository
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
-
+HOLIDAYS = True
 
 last_hash = 0
+mod_status = {mod.lower(): False for mod in WATCHLIST}  # False = offline, True = online
+session_start = {} 
+
 
 print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 
@@ -46,9 +37,10 @@ print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 async def main():
     task1 = asyncio.create_task(log_mods()) # Start the IRC Connection
     task2 = asyncio.create_task(run()) # Start the Chatbot
-    task3=asyncio.create_task(programme()) # Start oher Programs
+    task3 = asyncio.create_task(programme()) # Start oher Programs
+    task4 = asyncio.create_task(auto_force_offline())
     
-    await asyncio.gather(task1,task2,task3) # Run the things specified above
+    await asyncio.gather(task1,task2,task3,task4) # Run the things specified above
 
 async def log_event(user, event_type):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -67,8 +59,6 @@ async def get_chatters():
             return [u["user_login"].lower() for u in data.get("data", [])]
         
 
-
-mod_status = {mod.lower(): False for mod in WATCHLIST}  # False = offline, True = online
 
 async def log_mods():
     global last_hash
@@ -248,6 +238,72 @@ async def programme():
     os.startfile('C:\\Users\\DerFriese\\AppData\\Local\\Programs\\moobot-assistant\\Moobot-Assistant.exe')
     os.startfile("C:\\Users\DerFriese\\Desktop\\OBS.lnk")
     
+async def auto_force_offline():
+
+    while True:
+        if HOLIDAYS:
+            await asyncio.sleep(30)
+            continue
+
+        now = datetime.now()
+        weekday = now.weekday()  # 0=Mo, 6=So
+
+        # Shutdown-Zeiten:
+        cutoff_weekday = time(20, 55)     # Sunday-Thursday
+        cutoff_weekend = time(0, 0)       # Friday-Saturday (Midnight)
+
+        # Wochentags-Check
+        if weekday in [0, 1, 2, 3]:        # Monday–Thursday
+            target = cutoff_weekday
+        elif weekday == 6:                 # Sunday
+            target = cutoff_weekday
+        else:                              # Friday & Saturday
+            target = cutoff_weekend
+
+        # Check if the clock is configured correctly 
+        if now.time().hour == target.hour and now.time().minute == target.minute:
+
+            ts = now.strftime("%Y-%m-%d %H:%M:%S")
+
+            for mod in WATCHLIST:
+                mod_lower = mod.lower()
+
+                # Only logout Moderators that aren't currently offline
+                if mod_status.get(mod_lower, False):
+
+                    # calc session length
+                    if mod_lower in session_start:
+                        duration = now - session_start[mod_lower]
+                        duration_str = str(duration).split(".")[0]
+                    else:
+                        duration_str = "00:00:00"
+
+                    log_line = f"[{ts}] {mod} OFFLINE (Auto Shutdown) – Session: {duration_str}\n"
+
+                    with open(LOGFILE, "a", encoding="utf-8") as f:
+                        f.write(log_line)
+                        print(f"[AUTO-OFF] {log_line.strip()}")
+
+                    # Push
+                    subprocess.run(["git", "add", LOGFILE])
+                    subprocess.run(["git", "commit", "-m", f"Auto shutdown {datetime.now()}"])
+                    subprocess.run(["git", "push", "origin", "main"])
+
+                    # Change status
+                    mod_status[mod_lower] = False
+                    session_start.pop(mod_lower, None)
+        
+        else:
+            #print error
+            print(f"[FATAL] Critiacal Error: Clock is not configured correctly. Reconfigure the clock and try again.")
+            await asyncio.sleep(5)
+            exit
+        
+        
+            await asyncio.sleep(60)
+
+        await asyncio.sleep(5)
+
 
 
 # run setup
