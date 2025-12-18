@@ -11,6 +11,7 @@ import aiohttp
 import os
 import pygame
 from datetime import datetime, time
+import atexit
 
 load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
 
@@ -66,29 +67,53 @@ async def get_chatters():
 
 
 async def log_mods():
-    global last_hash
     while True:
-        chatters = await get_chatters() # Get mods in chat
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # get datetime now
+        chatters = await get_chatters()
+        if not chatters:
+            await asyncio.sleep(5)
+            continue
+
+        now = datetime.now()
+        ts = now.strftime("%Y-%m-%d %H:%M:%S")
 
         for mod in WATCHLIST:
             mod_lower = mod.lower()
             online = mod_lower in chatters
+            was_online = mod_status.get(mod_lower, False)
 
-            # Write if status has changed
-            if online != mod_status[mod_lower]:
-                event = "JOIN" if online else "PART"
-                log_line = f"[{ts}] {mod} {event}\n"
+            # ===== JOIN =====
+            if online and not was_online:
+                session_start[mod_lower] = now
+                log_line = f"[{ts}] {mod} JOIN\n"
 
                 with open(LOGFILE, "a", encoding="utf-8") as f:
                     f.write(log_line)
-                    print(f"[LOG] {log_line.strip()}")
-                    await asyncio.sleep(1)
-                    subprocess.run(["git", "add", LOGFILE])
-                    subprocess.run(["git", "commit", "-m", f"Auto update {datetime.now()}"])
-                    subprocess.run(["git", "push", "origin", "main"])
 
-                mod_status[mod_lower] = online  # Log status
+                print(f"[JOIN] {mod}")
+                mod_status[mod_lower] = True
+
+            # ===== PART =====
+            elif not online and was_online:
+                start = session_start.get(mod_lower)
+                if start:
+                    duration = now - start
+                    duration_str = str(duration).split(".")[0]
+                else:
+                    duration_str = "00:00:00"
+
+                log_line = f"[{ts}] {mod} PART – Session: {duration_str}\n"
+
+                with open(LOGFILE, "a", encoding="utf-8") as f:
+                    f.write(log_line)
+
+                print(f"[PART] {mod} ({duration_str})")
+                mod_status[mod_lower] = False
+                session_start.pop(mod_lower, None)
+
+                # Push nur bei echten Änderungen
+                subprocess.run(["git", "add", LOGFILE])
+                subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
+                subprocess.run(["git", "push", "origin", "main"])
 
         await asyncio.sleep(5)
 
@@ -304,6 +329,13 @@ async def auto_force_offline():
 
         await asyncio.sleep(5)
 
+def cleanup():
+    for mod, start in session_start.items():
+        if start:
+            seconds = int((datetime.now() - start).total_seconds())
+            log_event(mod, f"PART {seconds}")
+
+atexit.register(cleanup)
 
 
 # run setup
