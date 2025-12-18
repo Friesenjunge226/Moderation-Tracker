@@ -71,10 +71,12 @@ async function loadLog() {
 function parseLog(lines) {
     let sessions = {};
     let onlineSince = {};
+    let lastStatus = {};
 
-    for (let mod of ["mo_ju_rsck", "yinnox98_live", "meliorasisback"]) {
+    for (let mod of ["mo_ju_rsck", "ynox98", "meliora_sir_back"]) {
         sessions[mod] = 0;
         onlineSince[mod] = null;
+        lastStatus[mod] = "OFFLINE"; 
     }
 
     for (let line of lines) {
@@ -87,15 +89,18 @@ function parseLog(lines) {
 
         if (!sessions[mod]) sessions[mod] = 0;
 
+        // Status sofort setzen
+        lastStatus[mod] = ev === "JOIN" ? "ONLINE" : "OFFLINE";
+
         if (ev === "JOIN") {
             onlineSince[mod] = ts;
         } else if (ev === "PART" && onlineSince[mod]) {
-            sessions[mod] += (ts - onlineSince[mod]) / 1000; 
+            sessions[mod] += (ts - onlineSince[mod]) / 1000;
             onlineSince[mod] = null;
         }
     }
 
-    return sessions;
+    return { sessions, lastStatus };
 }
 
 function formatTime(seconds) {
@@ -104,25 +109,28 @@ function formatTime(seconds) {
     return `${h}h ${m}m`;
 }
 
-function updateSummary(sessions) {
+function updateSummary(data) {
+    const { sessions, lastStatus } = data;
     const el = document.getElementById("summary");
     el.innerHTML = "";
 
     for (const mod in sessions) {
+        const status = lastStatus[mod];
+        const color = status === "ONLINE" ? "#00ff88" : "#ff5555";
+
         const card = document.createElement("div");
         card.className = "card";
 
         card.innerHTML = `
             <h2>${mod}</h2>
             <p>Gesamte Zeit: <b>${formatTime(sessions[mod])}</b></p>
-            <p>Status: <b>${
-                sessions[mod] > 0 ? "Daten vorhanden" : "Keine Daten"
-            }</b></p>
+            <p>Status: <b style="color:${color}">${status}</b></p>
         `;
 
         el.appendChild(card);
     }
 }
+
 
 function buildCharts(sessions) {
     const labels = Object.keys(sessions);
@@ -172,10 +180,10 @@ function buildCharts(sessions) {
 
 async function init() {
     const lines = await loadLog();
-    const sessionData = parseLog(lines);
+    const data = parseLog(lines);
 
-    updateSummary(sessionData);
-    buildCharts(sessionData);
+    updateSummary(data);
+    buildCharts(data.sessions); 
 }
 
 init();
