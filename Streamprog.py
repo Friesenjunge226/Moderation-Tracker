@@ -17,11 +17,12 @@ load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # rea
 
 APP_ID = os.getenv("APP_ID") # ID of ther bot
 APP_SECRET = os.getenv("APP_SECRET") # Token of the bot
-USER_SCOPE = USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT] # Permissions the chatbot should have
+USER_SCOPE = [AuthScope.CHAT_READ,AuthScope.CHAT_EDIT,AuthScope.MODERATOR_READ_CHATTERS]
+ # Permissions the chatbot should have
 TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
-WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback"]  # Users to be Monitored
+WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback", "friesenjunge226"]  # Users to be Monitored
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 PUSH_INTERVAL = 300 # The interval in which the Script pushes data to the githhub repository
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
@@ -30,9 +31,6 @@ HOLIDAYS = False
 last_hash = 0
 mod_status = {mod.lower(): False for mod in WATCHLIST}  # False = offline, True = online
 session_start = {} 
-
-
-print(f"Chatbot and IRC Connection for the channel {TARGET_CHANNEL}")
 
 
 async def main():
@@ -206,7 +204,15 @@ async def aua(cmd: ChatCommand):
     
 async def test(cmd: ChatCommand):
     await cmd.reply(f"Test, Test. eins, zwei, drei. Test erfolgreich")
-
+    
+async def end_tracking(cmd: ChatCommand):
+    time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if cmd.user.name == "friesenjunge226":
+        for mod in WATCHLIST:
+            if mod_status.get(mod.lower(), False):
+                await cmd.reply(f"Mod Tracking erfolgreich um {time} beendet")
+    else:
+        await cmd.reply("Du bist nicht berechtigt, diesen Befehl zu nutzen.")
     
 # this is where we set up the bot
 async def run():
@@ -256,6 +262,7 @@ async def run():
     chat.register_command("pain", pain)
     chat.register_command("aua", aua)
     chat.register_command("test", test)
+    chat.register_command("endmodtracking", end_tracking)
 
     
     
