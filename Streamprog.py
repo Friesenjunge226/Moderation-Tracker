@@ -4,116 +4,70 @@ from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 import asyncio
-from datetime import datetime
 import subprocess
 from dotenv import load_dotenv
 import aiohttp
 import os
 import pygame
 from datetime import datetime, time
-import atexit
+import requests
+#import atexit
 
 load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
 
 APP_ID = os.getenv("APP_ID") # ID of ther bot
 APP_SECRET = os.getenv("APP_SECRET") # Token of the bot
-USER_SCOPE = [AuthScope.CHAT_READ,AuthScope.CHAT_EDIT,AuthScope.MODERATOR_READ_CHATTERS]
- # Permissions the chatbot should have
+USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT] # Permissions the chatbot should have
 TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
-WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback", "friesenjunge226"]  # Users to be Monitored
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
-PUSH_INTERVAL = 300 # The interval in which the Script pushes data to the githhub repository
+PUSH_INTERVAL = 5 # The interval in which the Script pushes data to the githhub repository in Seconds
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
-HOLIDAYS = False
 
-last_hash = 0
-mod_status = {mod.lower(): False for mod in WATCHLIST}  # False = offline, True = online
-session_start = {} 
+WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","Friesenjunge226"]  # Users to be Monitored
+BOTS = [TARGET_CHANNEL,"streamelements","moobot","nightbot","wizebot","ankhbot","phantombot","coebot","vercix","kappa_genius","streamlabs","streamloots"]  # Users to be excluded from tracking e.g. Bots
+HOLIDAYS = False # Disable automatic mod checkout after 21:00 on holidays
+
+
+
+print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
 
 
 async def main():
-    task1 = asyncio.create_task(log_mods()) # Start the IRC Connection
+    #task1 = asyncio.create_task(log_mods()) # Start the IRC Connection
     task2 = asyncio.create_task(run()) # Start the Chatbot
-    task4 = asyncio.create_task(auto_force_offline()) # Force all Mods offline after a specific Time
-    
-    await asyncio.gather(task1,task2,task4) # Run the things specified above
 
-async def log_event(user, event_type):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOGFILE, "a", encoding="utf-8") as f:
-        f.write(f"[{ts}] {user} {event_type}\n")
-        
-async def get_chatters():
-    url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={BROADCASTER_ID}&moderator_id={BROADCASTER_ID}"
-    headers = {
-        "Client-ID": APP_ID,
-        "Authorization": f"Bearer {TOKEN}"
-    }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as r:
-                data = await r.json()
-                return [u["user_login"].lower() for u in data.get("data", [])]
-    except (ConnectionResetError, ConnectionError, ConnectionRefusedError, ConnectionAbortedError):
-        print("[TwitchAPI] Connection Error, trying to reconnect")
-        asyncio.sleep(5)
-        return
-        
-        
+    await asyncio.gather(task2) # Run the things specified above
 
 
 async def log_mods():
     while True:
-        chatters = await get_chatters()
-        if not chatters:
-            await asyncio.sleep(5)
-            continue
-
-        now = datetime.now()
-        ts = now.strftime("%Y-%m-%d %H:%M:%S")
-
-        for mod in WATCHLIST:
-            mod_lower = mod.lower()
-            online = mod_lower in chatters
-            was_online = mod_status.get(mod_lower, False)
-
-            # ===== JOIN =====
-            if online and not was_online:
-                session_start[mod_lower] = now
-                log_line = f"[{ts}] {mod} JOIN\n"
-
-                with open(LOGFILE, "a", encoding="utf-8") as f:
-                    f.write(log_line)
-
-                print(f"[JOIN] {mod}")
-                mod_status[mod_lower] = True
-
-            # ===== PART =====
-            elif not online and was_online:
-                start = session_start.get(mod_lower)
-                if start:
-                    duration = now - start
-                    duration_str = str(duration).split(".")[0]
-                else:
-                    duration_str = "00:00:00"
-
-                log_line = f"[{ts}] {mod} PART – Session: {duration_str}\n"
-
-                with open(LOGFILE, "a", encoding="utf-8") as f:
-                    f.write(log_line)
-
-                print(f"[PART] {mod} ({duration_str})")
-                mod_status[mod_lower] = False
-                session_start.pop(mod_lower, None)
-
-                # Push nur bei echten Änderungen
-                subprocess.run(["git", "add", LOGFILE])
-                subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
-                subprocess.run(["git", "push", "origin", "main"])
-
-        await asyncio.sleep(5)
+        url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={BROADCASTER_ID}&moderator_id={BROADCASTER_ID}"
+        headers = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Client-ID": "1618fy8fq7wba32p612v6998zaz6c9"
+}
+        response = requests.get(url, headers=headers)
+        
+        #print(response.text) # For debugging purposes
+        
+        data = response.json()
+        
+        usernames = [user['user_login'] for user in data['data']]
+        Mods = set(usernames).intersection(WATCHLIST)
+        #print(f"Mods currently in Chat: {Mods}") # For debugging purposes
+        with open(LOGFILE, "a") as f:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"{ts}\n")
+    
+        
+        
+        
+async def push():
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
+    subprocess.run(["git", "push", "origin", "main"])
 
 
 
@@ -126,10 +80,11 @@ async def on_ready(ready_event: EventData):
 
 # this will be called whenever a message in a channel was send by either the bot OR another user
 async def on_message(msg: ChatMessage):
-    print(f'[TwitchAPI] in {msg.room.name}, {msg.user.name} said: {msg.text}')
-    pygame.mixer.init()
-    pygame.mixer.music.load("yes.mp3")
-    pygame.mixer.music.play()
+    if not msg.user.name in BOTS:
+        print(f'[TwitchAPI] in {msg.room.name}, {msg.user.name} said: {msg.text}')
+        pygame.mixer.init()
+        pygame.mixer.music.load("yes.mp3")
+        pygame.mixer.music.play()
 
     
 
@@ -204,15 +159,7 @@ async def aua(cmd: ChatCommand):
     
 async def test(cmd: ChatCommand):
     await cmd.reply(f"Test, Test. eins, zwei, drei. Test erfolgreich")
-    
-async def end_tracking(cmd: ChatCommand):
-    time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if cmd.user.name == "friesenjunge226":
-        for mod in WATCHLIST:
-            if mod_status.get(mod.lower(), False):
-                await cmd.reply(f"Mod Tracking erfolgreich um {time} beendet")
-    else:
-        await cmd.reply("Du bist nicht berechtigt, diesen Befehl zu nutzen.")
+
     
 # this is where we set up the bot
 async def run():
@@ -262,88 +209,11 @@ async def run():
     chat.register_command("pain", pain)
     chat.register_command("aua", aua)
     chat.register_command("test", test)
-    chat.register_command("endmodtracking", end_tracking)
 
     
     
     # we are done with our setup, lets start this bot up!
     chat.start()
-
-    
-async def auto_force_offline():
-
-    while True:
-        if not HOLIDAYS:
-            await asyncio.sleep(30)
-            continue
-
-        now = datetime.now()
-        weekday = now.weekday()  # 0=Mo, 6=So
-
-        # Shutdown-Zeiten:
-        cutoff_weekday = time(20, 55)     # Sunday-Thursday
-        cutoff_weekend = time(0, 0)       # Friday-Saturday (Midnight)
-
-        # Wochentags-Check
-        if weekday in [0, 1, 2, 3]:        # Monday–Thursday
-            target = cutoff_weekday
-        elif weekday == 6:                 # Sunday
-            target = cutoff_weekday
-        else:                              # Friday & Saturday
-            target = cutoff_weekend
-
-        # Check if the clock is configured correctly 
-        #if now.time().hour == target.hour and now.time().minute == target.minute:
-
-            ts = now.strftime("%Y-%m-%d %H:%M:%S")
-
-            for mod in WATCHLIST:
-                mod_lower = mod.lower()
-
-                # Only logout Moderators that aren't currently offline
-                if mod_status.get(mod_lower, False):
-
-                    # calc session length
-                    if mod_lower in session_start:
-                        duration = now - session_start[mod_lower]
-                        duration_str = str(duration).split(".")[0]
-                    else:
-                        duration_str = "00:00:00"
-
-                    log_line = f"[{ts}] {mod} OFFLINE (Auto Shutdown) – Session: {duration_str}\n"
-
-                    with open(LOGFILE, "a", encoding="utf-8") as f:
-                        f.write(log_line)
-                        print(f"[AUTO-OFF] {log_line.strip()}")
-
-                    # Push
-                    subprocess.run(["git", "add", LOGFILE])
-                    subprocess.run(["git", "commit", "-m", f"Auto shutdown {datetime.now()}"])
-                    subprocess.run(["git", "push", "origin", "main"])
-
-                    # Change status
-                    mod_status[mod_lower] = False
-                    session_start.pop(mod_lower, None)
-        
-        #else:
-            #print error
-            #print(f"[FATAL] Critiacal Error: Clock is not configured correctly. Reconfigure the clock and try again.")
-            #await asyncio.sleep(5)
-            #exit
-        
-        
-            await asyncio.sleep(60)
-
-        await asyncio.sleep(5)
-
-def cleanup():
-    for mod, start in session_start.items():
-        if start:
-            seconds = int((datetime.now() - start).total_seconds())
-            log_event(mod, f"PART {seconds}")
-
-atexit.register(cleanup)
-
 
 # run setup
 asyncio.run(main())
