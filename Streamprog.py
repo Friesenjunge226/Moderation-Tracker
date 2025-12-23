@@ -101,22 +101,33 @@ async def ping(cmd: ChatCommand):
     await cmd.reply('pong')
 
 async def Andy(cmd: ChatCommand):
-    await cmd.reply("WEEWOO Alarm Alarm ein Andy nähert sich dem Stream WEEWOO")
+    if cmd.user.name == "misterxpd_andy":
+        await cmd.reply("WEEWOO Alarm Alarm ein Andy nähert sich dem Stream WEEWOO")
+    else:
+        await cmd.reply("WEEWOO Das ist nicht der echte Andy!")
     
 async def Fr226(cmd: ChatCommand):
-    await cmd.reply("Der Friese ist da :3!")
+    if cmd.user.name == "friesenjunge226":
+        await cmd.reply("Der Friese ist da :3!")
+    else:
+        await cmd.reply("WEEWOO Wie kannst du es wagen!?")
 
 async def Larsi(cmd: ChatCommand):
-    await cmd.reply("Achtung Achtung. Platz daaa! Larsi ist da")
+    if cmd.user.name == "knirpslarsi_":
+        await cmd.reply("Achtung Achtung. Platz daaa! Larsi ist da")
+    else:
+        await cmd.reply("WEEWOO Das ist nicht der echte Larsi!")
 
 async def Liebe(cmd: ChatCommand):
     await cmd.reply("<3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3")
     
 async def Mo(cmd: ChatCommand):
-    await cmd.reply("Mo sagt Halli")
+    if cmd.user.name == "mo_ju_rsck":
+        await cmd.reply("Mo sagt Halli")
     
 async def Apex(cmd: ChatCommand):
-    await cmd.reply("Apex ist hier, um deinen Stream wegzuzaubern!")
+    if cmd.user.name == "yinnox98_live":
+        await cmd.reply("Apex ist hier, um deinen Stream wegzuzaubern!")
 
 async def banger(cmd: ChatCommand):
     await cmd.reply("Was ein Banger DinoDance DinoDance DinoDance")
@@ -131,13 +142,14 @@ async def hl(cmd: ChatCommand):
     await cmd.reply("Hallo, willkommen im Chat HYPERS ! Schön, dass du da bist.")
     
 async def kohl(cmd: ChatCommand):
-    await cmd.reply("Der Kohl übernimmt die Welt!!!!")
+    if cmd.user.name == "wargamer_live" or cmd.user.name == "wargamer2024":
+        await cmd.reply("Der Kohl übernimmt die Welt!!!!")
     
 async def noot(cmd: ChatCommand):
     await cmd.reply("°o° Noot Noot peepoCheer")
     
 async def shader(cmd: ChatCommand):
-    await cmd.reply("Friesenjunge nutzt den Complementary Reiminagined Shader!")
+    await cmd.reply("Friesenjunge226 nutzt den Complementary Reiminagined Shader!")
     
 async def trinken(cmd: ChatCommand):
     await cmd.reply("Alle Trinken jetzt nen Schluck. Prost.")
@@ -158,10 +170,83 @@ async def aua(cmd: ChatCommand):
     await cmd.reply(f"@{cmd.user.name} hat gerade große Schmerzen")
     
 async def test(cmd: ChatCommand):
-    await cmd.reply(f"Test, Test. eins, zwei, drei. Test erfolgreich")
-
+    if cmd.user.name in WATCHLIST or cmd.user.name == TARGET_CHANNEL:
+        await cmd.reply(f"Test, Test. eins, zwei, drei. Test erfolgreich")
+    else:
+        await cmd.reply("")
     
-# this is where we set up the bot
+async def shutdown(cmd: ChatCommand):
+    """Shutdown sequence"""
+    if cmd.user.name == TARGET_CHANNEL or cmd.user.name in WATCHLIST:
+        await cmd.send("Bot is shutting down...")
+        
+        try:
+            with open(LOGFILE, 'r') as file:
+                lines = file.readlines()
+            
+            for user in WATCHLIST:
+                for line in reversed(lines):
+                    if user in line:
+                        if "JOIN" in line:
+                            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            with open(LOGFILE, 'f') as f:
+                                f.writelines("[{ts}] {cmd.user.name} PART")
+                        break
+        except FileNotFoundError:
+            print(f"Log file not found: {LOGFILE}")
+        
+        # You an add any additional cleanup code here
+
+
+        pygame.mixer.stop()
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
+        subprocess.run(["git", "push", "origin", "main"])
+    else:
+        await cmd.reply("Du bist nicht berechtigt, diesen Befehl zu nutzen.")
+
+
+async def noticeme(cmd: ChatCommand):
+    """This command marks the user as present and initiates periodic checks"""
+    if cmd.user.name in WATCHLIST:
+        await cmd.reply("Melde an...")
+        with open(LOGFILE, "a") as logfile:
+            lines = logfile.readlines()
+            for line in reversed(lines):
+                if cmd.user.name in line:
+                    if "PART" in line:
+                        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        logfile.write(f"[{ts}] {cmd.user.name} JOIN")
+                        await cmd.reply("Du wurdest als anwesend markiert PETTHEMODS")
+                        logged_in_mods = [mod for mod in WATCHLIST if f"{mod} JOIN" in line]
+                        modcheck(logged_in_mods)
+                        continue
+                    elif "JOIN" in line:
+                        await cmd.reply("Du bist bereits als anwesend markiert.")
+                        continue
+    else:
+        await cmd.reply("Du bist nicht berechtigt, diesem Befehl zu nutzen.")
+async def pride(cmd: ChatCommand):
+    await cmd.reply("All for it BisexualPride GayPride GenderFluidPride TransgenderPride PansexualPride NonbinaryPride IntersexPride AsexualPride LesbianPride BisexualPride VirtualHug")
+    
+async def cmdlist(cmd: ChatCommand):
+    await cmd.reply("Alle commands commands: !Andy !Friese !Larsi !Liebe !Mo !Apex !Banger !bye !dc !dc !hl !kohl !nootnoot !shader !trinken !wa !lurk !unlurk !pain !aua !test !shutdown !pride !cmds")
+
+
+async def modcheck(logged_in_mods):
+    """Check and log moderator status periodically"""
+    
+    while True:
+        url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={BROADCASTER_ID}&moderator_id={BROADCASTER_ID}"
+        headers = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Client-ID": APP_ID
+}
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        usernames = [user['user_login'] for user in data['data']]
+        Mods = set(usernames).intersection(logged_in_mods)
+
 async def run():
     # set up twitch api instance and add user authentication with some scopes
     twitch = await Twitch(APP_ID, APP_SECRET)
@@ -209,6 +294,12 @@ async def run():
     chat.register_command("pain", pain)
     chat.register_command("aua", aua)
     chat.register_command("test", test)
+    chat.register_command("shutdown", shutdown)
+    chat.register_command("noticeme", noticeme)
+    chat.register_command("pride", pride)
+    chat.register_command("commands", cmdlist)
+    chat.register_command("cmds", cmdlist)
+    
 
     
     
