@@ -12,6 +12,7 @@ import pygame
 from datetime import datetime, time
 import requests
 #import atexit
+import random
 
 load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
 
@@ -25,7 +26,7 @@ LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 PUSH_INTERVAL = 5 # The interval in which the Script pushes data to the githhub repository in Seconds
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
 
-WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","Friesenjunge226"]  # Users to be Monitored
+WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","friesenjunge226"]  # Users to be Monitored
 BOTS = [TARGET_CHANNEL,"streamelements","moobot","nightbot","wizebot","ankhbot","phantombot","coebot","vercix","kappa_genius","streamlabs","streamloots"]  # Users to be excluded from tracking e.g. Bots
 HOLIDAYS = False # Disable automatic mod checkout after 21:00 on holidays
 
@@ -139,7 +140,7 @@ async def discord(cmd: ChatCommand):
     await cmd.reply("Trete gerne meinem Community Discord Server bei, um keinen Stream mehr zu verpassen -> https://discord.com/invite/b77hdjUuyX")
     
 async def hl(cmd: ChatCommand):
-    await cmd.reply("Hallo, willkommen im Chat HYPERS ! Schön, dass du da bist.")
+    await cmd.reply(f"Hallo, willkommen im Chat {cmd.user.name} HYPERS ! Schön, dass du da bist.")
     
 async def kohl(cmd: ChatCommand):
     if cmd.user.name == "wargamer_live" or cmd.user.name == "wargamer2024":
@@ -172,12 +173,10 @@ async def aua(cmd: ChatCommand):
 async def test(cmd: ChatCommand):
     if cmd.user.name in WATCHLIST or cmd.user.name == TARGET_CHANNEL:
         await cmd.reply(f"Test, Test. eins, zwei, drei. Test erfolgreich")
-    else:
-        await cmd.reply("")
     
 async def shutdown(cmd: ChatCommand):
     """Shutdown sequence"""
-    if cmd.user.name == TARGET_CHANNEL or cmd.user.name in WATCHLIST:
+    if cmd.user.name in TARGET_CHANNEL or cmd.user.name in WATCHLIST:
         await cmd.send("Bot is shutting down...")
         
         try:
@@ -197,11 +196,13 @@ async def shutdown(cmd: ChatCommand):
         
         # You an add any additional cleanup code here
 
-
+        pygame.mixer.init()
         pygame.mixer.stop()
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
         subprocess.run(["git", "push", "origin", "main"])
+        asyncio.get_event_loop().stop()
+        exit
     else:
         await cmd.reply("Du bist nicht berechtigt, diesen Befehl zu nutzen.")
 
@@ -219,7 +220,8 @@ async def noticeme(cmd: ChatCommand):
                         logfile.write(f"[{ts}] {cmd.user.name} JOIN")
                         await cmd.reply("Du wurdest als anwesend markiert PETTHEMODS")
                         logged_in_mods = [mod for mod in WATCHLIST if f"{mod} JOIN" in line]
-                        modcheck(logged_in_mods)
+                        Noticeme = cmd.user.name
+                        modcheck(logged_in_mods, Noticeme)
                         continue
                     elif "JOIN" in line:
                         await cmd.reply("Du bist bereits als anwesend markiert.")
@@ -232,8 +234,13 @@ async def pride(cmd: ChatCommand):
 async def cmdlist(cmd: ChatCommand):
     await cmd.reply("Alle commands commands: !Andy !Friese !Larsi !Liebe !Mo !Apex !Banger !bye !dc !dc !hl !kohl !nootnoot !shader !trinken !wa !lurk !unlurk !pain !aua !test !shutdown !pride !cmds")
 
+async def love(cmd: ChatCommand):
+    love = random.randint(0,100)
+    if love == 100:
+        love = random.randint(100,1000)
+    await cmd.reply(f"Die liebe zwichen @{cmd.user.name} und {cmd.parameter} beträgt {love}%")
 
-async def modcheck(logged_in_mods):
+async def modcheck(logged_in_mods, Noticeme):
     """Check and log moderator status periodically"""
     
     while True:
@@ -246,6 +253,13 @@ async def modcheck(logged_in_mods):
         data = response.json()
         usernames = [user['user_login'] for user in data['data']]
         Mods = set(usernames).intersection(logged_in_mods)
+        with open(LOGFILE, "a") as logfile:
+            lines = logfile.readlines()
+            for line in reversed(lines):
+                if "PART" in line and Noticeme in line:
+                    break
+                elif "JOIN" in line and Noticeme in line:
+                    break
 
 async def run():
     # set up twitch api instance and add user authentication with some scopes
@@ -299,6 +313,7 @@ async def run():
     chat.register_command("pride", pride)
     chat.register_command("commands", cmdlist)
     chat.register_command("cmds", cmdlist)
+    chat.register_command("love", love)
     
 
     
@@ -308,3 +323,17 @@ async def run():
 
 # run setup
 asyncio.run(main())
+
+
+"""async def part(cmd: ChatCommand):
+    if HOLIDAYS:
+        current_time = datetime.now().time()
+        if current_time >= time(21, 0):
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(LOGFILE, "a") as f:
+                f.write(f"[{ts}] {cmd.user.name} PART\n")
+            await cmd.reply("Es ist nach 21:00 Uhr. Du wurdest automatisch abgemeldet. Bis morgen!")
+            return
+        
+        
+async def am():"""
