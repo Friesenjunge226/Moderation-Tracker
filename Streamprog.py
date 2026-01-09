@@ -180,8 +180,8 @@ async def shutdown(cmd: ChatCommand):
         await cmd.send("Bot is shutting down...")
         
         try:
-            with open(LOGFILE, 'r') as file:
-                lines = file.readlines()
+            with open(LOGFILE, 'r') as f:
+                lines = f.readline()
             
             for user in WATCHLIST:
                 for line in reversed(lines):
@@ -228,17 +228,28 @@ async def noticeme(cmd: ChatCommand):
                         continue
     else:
         await cmd.reply("Du bist nicht berechtigt, diesem Befehl zu nutzen.")
+        
+        
 async def pride(cmd: ChatCommand):
-    await cmd.reply("All for it BisexualPride GayPride GenderFluidPride TransgenderPride PansexualPride NonbinaryPride IntersexPride AsexualPride LesbianPride BisexualPride VirtualHug")
+    await cmd.reply("BisexualPride GayPride GenderFluidPride TransgenderPride PansexualPride NonbinaryPride IntersexPride AsexualPride LesbianPride BisexualPride VirtualHug")
     
 async def cmdlist(cmd: ChatCommand):
-    await cmd.reply("Alle commands commands: !Andy !Friese !Larsi !Liebe !Mo !Apex !Banger !bye !dc !dc !hl !kohl !nootnoot !shader !trinken !wa !lurk !unlurk !pain !aua !test !shutdown !pride !cmds")
+    await cmd.reply("Alle commands: !Andy !Friese !Larsi !Liebe !Mo !Apex !Banger !bye !dc !dc !hl !kohl !nootnoot !shader !trinken !wa !lurk !unlurk !pain !aua !test !shutdown !pride !cmds")
+    if cmd.user.name in WATCHLIST or cmd.user.name == TARGET_CHANNEL:
+        await cmd.reply("Admin commands: !noticeme")
 
 async def love(cmd: ChatCommand):
     love = random.randint(0,100)
-    if love == 100:
-        love = random.randint(100,1000)
-    await cmd.reply(f"Die liebe zwichen @{cmd.user.name} und {cmd.parameter} beträgt {love}%")
+    if cmd.parameter != "":
+        if cmd.parameter in WATCHLIST:
+            love = "Mod"
+        elif cmd.parameter == TARGET_CHANNEL:
+            love = "Mindestens 100"
+        if love == 100:
+            love = random.randint(101,1000)
+        await cmd.reply(f"Die liebe zwichen @{cmd.user.name} und {cmd.parameter} beträgt {love}%")
+    else:
+        await cmd.reply(f"Finde die Liebe zwischen zwei Chattern mit '!Love StinkyCheese ' !")
 
 async def modcheck(logged_in_mods, Noticeme):
     """Check and log moderator status periodically"""
