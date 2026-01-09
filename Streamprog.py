@@ -25,6 +25,7 @@ BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 PUSH_INTERVAL = 5 # The interval in which the Script pushes data to the githhub repository in Seconds
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
+LOVE_FILE = "love_scores.txt"  # File to store love scores
 
 WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","friesenjunge226"]  # Users to be Monitored
 BOTS = [TARGET_CHANNEL,"streamelements","moobot","nightbot","wizebot","ankhbot","phantombot","coebot","vercix","kappa_genius","streamlabs","streamloots"]  # Users to be excluded from tracking e.g. Bots
@@ -238,19 +239,59 @@ async def cmdlist(cmd: ChatCommand):
     if cmd.user.name in WATCHLIST or cmd.user.name == TARGET_CHANNEL:
         await cmd.reply("Admin commands: !noticeme")
 
-async def love(cmd: ChatCommand):
-    love = random.randint(0,100)
-    if cmd.parameter != "":
-        if cmd.parameter in WATCHLIST:
-            love = "Mod"
-        elif cmd.parameter == TARGET_CHANNEL:
-            love = "Mindestens 100"
-        if love == 100:
-            love = random.randint(101,1000)
-        await cmd.reply(f"Die liebe zwichen @{cmd.user.name} und {cmd.parameter} beträgt {love}%")
-    else:
-        await cmd.reply(f"Finde die Liebe zwischen zwei Chattern mit '!Love StinkyCheese ' !")
+def load_love_scores():
+    if not os.path.exists(LOVE_FILE):
+        return {}
+    with open(LOVE_FILE, "r", encoding="utf-8") as f:
+        return f.load(f)
 
+
+def save_love_scores(data):
+    with open(LOVE_FILE, "w", encoding="utf-8") as f:
+        f.dump(data, f, indent=2)
+
+
+def make_love_key(user1: str, user2: str) -> str:
+    # Reihenfolge egal
+    return "|".join(sorted([user1.lower(), user2.lower()]))
+
+
+async def love(cmd: ChatCommand):
+    target = cmd.parameter.strip().lower()
+
+    if not target:
+        await cmd.reply(
+            "Finde die Liebe zwischen zwei Chattern mit '!love StinkyCheese'"
+        )
+        return
+
+    user = cmd.user.name.lower()
+    key = make_love_key(user, target)
+
+    love_scores = load_love_scores()
+
+    # Bereits bekannt?
+    if key in love_scores:
+        love_value = love_scores[key]
+
+    else:
+        # Sonderfälle
+        if target in [m.lower() for m in WATCHLIST]:
+            love_value = "Mod"
+        elif target == TARGET_CHANNEL.lower():
+            love_value = "Mindestens 100"
+        else:
+            love_value = random.randint(0, 100)
+            if love_value == 100:
+                love_value = random.randint(100, 1000)
+
+        love_scores[key] = love_value
+        save_love_scores(love_scores)
+
+    await cmd.reply(
+        f"Die Liebe zwischen @{cmd.user.name} und {cmd.parameter} beträgt {love_value}% <3"
+    )
+    
 async def modcheck(logged_in_mods, Noticeme):
     """Check and log moderator status periodically"""
     
