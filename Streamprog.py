@@ -6,13 +6,12 @@ from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 import asyncio
 import subprocess
 from dotenv import load_dotenv
-import aiohttp
-import os
 import pygame
 from datetime import datetime, time
 import requests
-#import atexit
 import random
+import re
+import unicodedata
 
 load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
 
@@ -213,20 +212,11 @@ async def noticeme(cmd: ChatCommand):
     if cmd.user.name in WATCHLIST:
         await cmd.reply("Melde an...")
         with open(LOGFILE, "a") as logfile:
-            lines = logfile.readlines()
-            for line in reversed(lines):
-                if cmd.user.name in line:
-                    if "PART" in line:
-                        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        logfile.write(f"[{ts}] {cmd.user.name} JOIN")
-                        await cmd.reply("Du wurdest als anwesend markiert PETTHEMODS")
-                        logged_in_mods = [mod for mod in WATCHLIST if f"{mod} JOIN" in line]
-                        Noticeme = cmd.user.name
-                        modcheck(logged_in_mods, Noticeme)
-                        continue
-                    elif "JOIN" in line:
-                        await cmd.reply("Du bist bereits als anwesend markiert.")
-                        continue
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logfile.write(f"[{ts}] {cmd.user.name} JOIN")
+            logged_in_mods = [mod for mod in WATCHLIST if f"{mod} JOIN" in logfile]
+            Noticeme = cmd.user.name
+            modcheck(logged_in_mods, Noticeme)
     else:
         await cmd.reply("Du bist nicht berechtigt, diesem Befehl zu nutzen.")
         
@@ -239,58 +229,92 @@ async def cmdlist(cmd: ChatCommand):
     if cmd.user.name in WATCHLIST or cmd.user.name == TARGET_CHANNEL:
         await cmd.reply("Admin commands: !noticeme")
 
-def load_love_scores():
+def normalize_name(name: str) -> str:
+    name = name.strip().lower()
+
+    # Unicode normalisieren (killt viele kaputte Zeichen)
+    name = unicodedata.normalize("NFKC", name)
+
+    # Entfernt ALLE Whitespaces (auch Zero-Width)
+    name = re.sub(r"\s+", "", name)
+
+    # Entfernt explizit Zero-Width-Zeichen
+    name = re.sub(r"[\u200B-\u200D\uFEFF]", "", name)
+
+    return name
+
+
+def normalize_pair(a: str, b: str) -> tuple[str, str]:
+    a = normalize_name(a)
+    b = normalize_name(b)
+    return tuple(sorted((a, b)))
+
+
+# ---------- FILE HANDLING ----------
+def load_love_scores() -> dict:
+    scores = {}
+
     if not os.path.exists(LOVE_FILE):
-        return {}
+        return scores
+
     with open(LOVE_FILE, "r", encoding="utf-8") as f:
-        return f.load(f)
+        for line in f:
+            line = line.strip()
+            if not line or "|" not in line:
+                continue
+
+            try:
+                a, b, value = line.split("|", 2)
+                pair = normalize_pair(a, b)
+                scores[pair] = value
+            except ValueError:
+                continue
+
+    return scores
 
 
-def save_love_scores(data):
+def save_love_score(a: str, b: str, value: str):
+    pair = normalize_pair(a, b)
+
+    scores = load_love_scores()
+    scores[pair] = value
+
     with open(LOVE_FILE, "w", encoding="utf-8") as f:
-        f.dump(data, f, indent=2)
-
-
-def make_love_key(user1: str, user2: str) -> str:
-    # Reihenfolge egal
-    return "|".join(sorted([user1.lower(), user2.lower()]))
-
+        for (u1, u2), v in scores.items():
+            f.write(f"{u1}|{u2}|{v}\n")
 
 async def love(cmd: ChatCommand):
-    target = cmd.parameter.strip().lower()
-
-    if not target:
-        await cmd.reply(
-            "Finde die Liebe zwischen zwei Chattern mit '!love StinkyCheese'"
-        )
+    if not cmd.parameter:
+        await cmd.reply("Nutze: !love <Name>")
         return
 
-    user = cmd.user.name.lower()
-    key = make_love_key(user, target)
+    user = cmd.user.name
+    target = cmd.parameter
 
-    love_scores = load_love_scores()
+    pair = normalize_pair(user, target)
+    scores = load_love_scores()
 
-    # Bereits bekannt?
-    if key in love_scores:
-        love_value = love_scores[key]
-
+    # Bereits vorhanden → aus Datei lesen
+    if pair in scores:
+        love_value = scores[pair]
     else:
-        # Sonderfälle
-        if target in [m.lower() for m in WATCHLIST]:
-            love_value = "Mod"
-        elif target == TARGET_CHANNEL.lower():
-            love_value = "Mindestens 100"
+        # Spezialfälle
+        if normalize_name(target) in [normalize_name(m) for m in WATCHLIST]:
+            love_value = "Mod ❤️"
+        elif normalize_name(target) == normalize_name(TARGET_CHANNEL):
+            love_value = "Mindestens 100%"
         else:
-            love_value = random.randint(0, 100)
-            if love_value == 100:
-                love_value = random.randint(100, 1000)
+            value = random.randint(0, 100)
+            if value == 100:
+                value = random.randint(101, 1000)
+            love_value = f"{value}%"
 
-        love_scores[key] = love_value
-        save_love_scores(love_scores)
+        save_love_score(user, target, love_value)
 
     await cmd.reply(
-        f"Die Liebe zwischen @{cmd.user.name} und {cmd.parameter} beträgt {love_value}% <3"
+        f"Die Liebe zwischen @{user} und {target} beträgt {love_value}"
     )
+
     
 async def modcheck(logged_in_mods, Noticeme):
     """Check and log moderator status periodically"""
@@ -305,13 +329,12 @@ async def modcheck(logged_in_mods, Noticeme):
         data = response.json()
         usernames = [user['user_login'] for user in data['data']]
         Mods = set(usernames).intersection(logged_in_mods)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(LOGFILE, "a") as logfile:
-            lines = logfile.readlines()
-            for line in reversed(lines):
-                if "PART" in line and Noticeme in line:
-                    break
-                elif "JOIN" in line and Noticeme in line:
-                    break
+            if Noticeme not in Mods:    
+                logfile.write(f"[{ts}] {noticeme} PART\n")
+
+
 
 async def run():
     # set up twitch api instance and add user authentication with some scopes
