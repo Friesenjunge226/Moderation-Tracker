@@ -369,17 +369,3 @@ async def run():
 
 # run setup
 asyncio.run(main())
-
-
-"""async def part(cmd: ChatCommand):
-    if HOLIDAYS:
-        current_time = datetime.now().time()
-        if current_time >= time(21, 0):
-            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(LOGFILE, "a") as f:
-                f.write(f"[{ts}] {cmd.user.name} PART\n")
-            await cmd.reply("Es ist nach 21:00 Uhr. Du wurdest automatisch abgemeldet. Bis morgen!")
-            return
-        
-        
-async def am():"""
