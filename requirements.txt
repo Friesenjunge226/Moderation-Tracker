@@ -1,0 +1,11 @@
+os
+pytwitchapi==4.5.0
+asyncio
+subprocess
+dotenv
+pygame
+datetime
+requests
+random
+re
+unicodedata

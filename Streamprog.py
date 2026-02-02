@@ -22,8 +22,9 @@ TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
-PUSH_INTERVAL = 5 # The interval in which the Script pushes data to the githhub repository in Seconds
 BROADCASTER_ID = os.getenv("BROADCASTER_ID")
+
+
 LOVE_FILE = "love_scores.txt"  # File to store love scores
 
 WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","friesenjunge226"]  # Users to be Monitored
@@ -223,32 +224,11 @@ async def cmdlist(cmd: ChatCommand):
     if cmd.user.name in WATCHLIST or cmd.user.name == TARGET_CHANNEL:
         await cmd.reply("Admin commands: !noticeme")
 
-def normalize_name(name: str) -> str:
-    name = name.strip().lower()
-
-    # Unicode normalisieren (killt viele kaputte Zeichen)
-    name = unicodedata.normalize("NFKC", name)
-
-    # Entfernt ALLE Whitespaces (auch Zero-Width)
-    name = re.sub(r"\s+", "", name)
-
-    # Entfernt explizit Zero-Width-Zeichen
-    name = re.sub(r"[\u200B-\u200D\uFEFF]", "", name)
-
-    return name
-
-
-def normalize_pair(a: str, b: str) -> tuple[str, str]:
-    a = normalize_name(a)
-    b = normalize_name(b)
-    return tuple(sorted((a, b)))
-
-
-# ---------- FILE HANDLING ----------
-def load_love_scores() -> dict:
+def load_love_scores(cmd:ChatCommand, user, target) -> dict:
     scores = {}
 
     if not os.path.exists(LOVE_FILE):
+        cmd.chat("[WARNING] Love file not found")
         return scores
 
     with open(LOVE_FILE, "r", encoding="utf-8") as f:
@@ -256,10 +236,10 @@ def load_love_scores() -> dict:
             line = line.strip()
             if not line or "|" not in line:
                 continue
-
+            
             try:
-                a, b, value = line.split("|", 2)
-                pair = normalize_pair(a, b)
+                user, target, value = line.split("|", 2)
+                pair = user, target
                 scores[pair] = value
             except ValueError:
                 continue
@@ -267,8 +247,8 @@ def load_love_scores() -> dict:
     return scores
 
 
-def save_love_score(a: str, b: str, value: str):
-    pair = normalize_pair(a, b)
+def save_love_score(user, target, value: str):
+    pair = user, target
 
     scores = load_love_scores()
     scores[pair] = value
@@ -276,31 +256,34 @@ def save_love_score(a: str, b: str, value: str):
     with open(LOVE_FILE, "w", encoding="utf-8") as f:
         for (u1, u2), v in scores.items():
             f.write(f"{u1}|{u2}|{v}\n")
-
+            
+            
+            
+            
+            
 async def love(cmd: ChatCommand):
-    if not cmd.parameter:
+    if not cmd.parameter:  #TODO: MACHE Besser nacricht
         await cmd.reply("Nutze: !love <Name>")
         return
 
     user = cmd.user.name
     target = cmd.parameter
 
-    pair = normalize_pair(user, target)
+    pair = user, target
     scores = load_love_scores()
 
-    # Bereits vorhanden → aus Datei lesen
+    # Bereits vorhanden -> aus Datei lesen
     if pair in scores:
-        love_value = scores[pair]
+        value = scores[pair]
     else:
         value = random.randint(0, 100)
         if value >= 95:
             value = random.randint(101, 1000)
-        love_value = f"{value}%"
 
-        save_love_score(user, target, love_value)
+        save_love_score(user, target, value)
 
     await cmd.reply(
-        f"Die Liebe zwischen @{user} und {target} beträgt {love_value}"
+        f"Die Liebe zwischen @{user} und {target} beträgt {value}%!"
     )
 
     
