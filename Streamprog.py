@@ -104,20 +104,14 @@ async def ping(cmd: ChatCommand):
 async def Andy(cmd: ChatCommand):
     if cmd.user.name == "misterxpd_andy":
         await cmd.reply("WEEWOO Alarm Alarm ein Andy nähert sich dem Stream WEEWOO")
-    else:
-        await cmd.reply("WEEWOO Das ist nicht der echte Andy!")
     
 async def Fr226(cmd: ChatCommand):
     if cmd.user.name == "friesenjunge226":
         await cmd.reply("Der Friese ist da :3!")
-    else:
-        await cmd.reply("WEEWOO Wie kannst du es wagen!?")
 
 async def Larsi(cmd: ChatCommand):
     if cmd.user.name == "knirpslarsi_":
         await cmd.reply("Achtung Achtung. Platz daaa! Larsi ist da")
-    else:
-        await cmd.reply("WEEWOO Das ist nicht der echte Larsi!")
 
 async def Liebe(cmd: ChatCommand):
     await cmd.reply("<3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3 <3")
@@ -298,16 +292,10 @@ async def love(cmd: ChatCommand):
     if pair in scores:
         love_value = scores[pair]
     else:
-        # Spezialfälle
-        if normalize_name(target) in [normalize_name(m) for m in WATCHLIST]:
-            love_value = "Mod ❤️"
-        elif normalize_name(target) == normalize_name(TARGET_CHANNEL):
-            love_value = "Mindestens 100%"
-        else:
-            value = random.randint(0, 100)
-            if value == 100:
-                value = random.randint(101, 1000)
-            love_value = f"{value}%"
+        value = random.randint(0, 100)
+        if value >= 95:
+            value = random.randint(101, 1000)
+        love_value = f"{value}%"
 
         save_love_score(user, target, love_value)
 
