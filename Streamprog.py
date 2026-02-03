@@ -10,10 +10,53 @@ import pygame
 from datetime import datetime, time
 import requests
 import random
-import re
-import unicodedata
 
-load_dotenv(dotenv_path="C:/Users/DerFriese/Moderation-Tracker/keys.env")  # reads variables from a .env file and sets them in os.environ
+
+print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
+CONFIG = "config.conf"  # Path to the config file
+
+# Get configuration from Config file
+with open(CONFIG, "r") as f:
+    f.readlines()
+    for line in f:
+        if "CurrentVersion" in line:
+            CurrentVersion = line.split(":")[1].strip()
+        elif "ShowDebugMessages" in line:
+            ShowDebugMessages = line.split(":")[1].strip()
+        elif "IsHoliday" in line:
+            IsHoliday = line.split(":")[1].strip()
+        elif "AutoLogoffTime":
+            AutoLogoffTime = line.split(":")[1].strip()
+        elif "UseLoggedLoveScores" in line:
+            UseLoggedLoveScores = line.split(":")[1].strip()
+        elif "PlayMessageSoundEffects" in line:
+            PlayMessageSoundEffects = line.split(":")[1].strip()
+            if PlayMessageSoundEffects == "True":
+                pygame.mixer.init()
+                if ShowDebugMessages == "True":
+                    print("[DEBUG] Sound effects initalized")
+            else:
+                if ShowDebugMessages == "True":
+                    print("[DEBUG] Sound effects disabled, Skipping Sound initalization")
+        elif "CheckForUpdatesOnStartup" in line:
+            CheckForUpdatesOnStartup = line.split(":")[1].strip()
+        elif "UpdateCheckURL" in line:
+            UpdateCheckURL = line.split(":")[1].strip()
+        elif "UseChatCommands" in line:
+            UseChatCommands = line.split(":")[1].strip()
+        elif "KeyFile" in line:
+            KeyFile = line.split(":")[1].strip()
+        elif "LoveScoreFile" in line:
+            LOVE_FILE = line.split(":")[1].strip()
+        elif "CheckInterval" in line:
+            CheckInterval = line.split(":")[1].strip()
+        elif "WatchedModerators" in line:
+            WATCHLIST = line.split(":")[1].strip().split(",")
+        elif "BotNames" in line:
+            BOTS = line.split(":")[1].strip().split(",")
+            
+            
+load_dotenv(dotenv_path=KeyFile)  # reads variables from a .env file and sets them in os.environ
 
 APP_ID = os.getenv("APP_ID") # ID of ther bot
 APP_SECRET = os.getenv("APP_SECRET") # Token of the bot
@@ -22,54 +65,32 @@ TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
-BROADCASTER_ID = os.getenv("BROADCASTER_ID")
+BROADCASTER_ID = os.getenv("BROADCASTER_ID") # The Username of the channel the bot is running in
 
-
-LOVE_FILE = "love_scores.txt"  # File to store love scores
-
-WATCHLIST = ["mo_ju_rsck","yinnox98_live","meliorasisback","friesenjunge226"]  # Users to be Monitored
-BOTS = [TARGET_CHANNEL,"streamelements","moobot","nightbot","wizebot","ankhbot","phantombot","coebot","vercix","kappa_genius","streamlabs","streamloots"]  # Users to be excluded from tracking e.g. Bots
-HOLIDAYS = False # Disable automatic mod checkout after 21:00 on holidays
-
-
-
-print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
+if CheckForUpdatesOnStartup == "True":
+    response = requests.get(UpdateCheckURL)
+    if int(response) >= int(CurrentVersion):
+        for i in range(10):
+            print("[UPDATE] A new version of the Moderation Tracker is available. Please visit the GitHub page to download the latest version.")
+        UpdateAvailable = True
 
 
 async def main():
-    #task1 = asyncio.create_task(log_mods()) # Start the IRC Connection
-    task2 = asyncio.create_task(run()) # Start the Chatbot
-
-    await asyncio.gather(task2) # Run the things specified above
-
-
-async def log_mods():
-    while True:
-        url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={BROADCASTER_ID}&moderator_id={BROADCASTER_ID}"
-        headers = {
-    "Authorization": f"Bearer {TOKEN}",
-    "Client-ID": "1618fy8fq7wba32p612v6998zaz6c9"
-}
-        response = requests.get(url, headers=headers)
-        
-        #print(response.text) # For debugging purposes
-        
-        data = response.json()
-        
-        usernames = [user['user_login'] for user in data['data']]
-        Mods = set(usernames).intersection(WATCHLIST)
-        #print(f"Mods currently in Chat: {Mods}") # For debugging purposes
-        with open(LOGFILE, "a") as f:
-            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            f.write(f"{ts}\n")
     
-        
-        
-        
+    # create tasks for the things to run
+    # This is where you can add more things to run in parallel
+    task1 = asyncio.create_task(run()) # Start the Chatbot
+
+    await asyncio.gather(task1) # Run the things specified above
+    if ShowDebugMessages == "True":
+        print("[DEBUG] Main tasks started")
+
 async def push():
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
     subprocess.run(["git", "push", "origin", "main"])
+    if ShowDebugMessages == "True":
+        print("[DEBUG] Changes pushed to remote repository")
 
 
 
@@ -84,9 +105,9 @@ async def on_ready(ready_event: EventData):
 async def on_message(msg: ChatMessage):
     if not msg.user.name in BOTS:
         print(f'[TwitchAPI] in {msg.room.name}, {msg.user.name} said: {msg.text}')
-        pygame.mixer.init()
-        pygame.mixer.music.load("yes.mp3")
-        pygame.mixer.music.play()
+        if PlayMessageSoundEffects == "True":
+            pygame.mixer.music.load("yes.mp3")
+            pygame.mixer.music.play()
 
     
 
@@ -176,16 +197,8 @@ async def shutdown(cmd: ChatCommand):
         
         try:
             with open(LOGFILE, 'r') as f:
-                lines = f.readline()
-            
-            for user in WATCHLIST:
-                for line in reversed(lines):
-                    if user in line:
-                        if "JOIN" in line:
-                            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            with open(LOGFILE, 'f') as f:
-                                f.writelines("[{ts}] {cmd.user.name} PART")
-                        break
+                for mod in WATCHLIST:
+                    f.write(f"")
         except FileNotFoundError:
             print(f"Log file not found: {LOGFILE}")
         
@@ -255,15 +268,11 @@ def save_love_score(user, target, value: str):
 
     with open(LOVE_FILE, "w", encoding="utf-8") as f:
         for (u1, u2), v in scores.items():
-            f.write(f"{u1}|{u2}|{v}\n")
-            
-            
-            
-            
+            f.write(f"{u1}|{u2}|{v}\n")  
             
 async def love(cmd: ChatCommand):
-    if not cmd.parameter:  #TODO: MACHE Besser nacricht
-        await cmd.reply("Nutze: !love <Name>")
+    if not cmd.parameter:
+        await cmd.reply("Nutze den Befehl !love <Zielperson>, um die Liebe zwischen dir und der Zielperson zu überprüfen.")
         return
 
     user = cmd.user.name
@@ -273,17 +282,18 @@ async def love(cmd: ChatCommand):
     scores = load_love_scores()
 
     # Bereits vorhanden -> aus Datei lesen
-    if pair in scores:
-        value = scores[pair]
-    else:
-        value = random.randint(0, 100)
-        if value >= 95:
-            value = random.randint(101, 1000)
+    if UseLoggedLoveScores == "True":
+        if pair in scores:
+            value = scores[pair]
+        else:
+            value = random.randint(0, 100)
+            if value >= 95:
+                value = random.randint(101, 1000)
 
-        save_love_score(user, target, value)
+            save_love_score(user, target, value)
 
-    await cmd.reply(
-        f"Die Liebe zwischen @{user} und {target} beträgt {value}%!"
+        await cmd.reply(
+            f"Die Liebe zwischen @{user} und {target} beträgt {value}%!"
     )
 
     
@@ -304,6 +314,9 @@ async def modcheck(logged_in_mods, Noticeme):
         with open(LOGFILE, "a") as logfile:
             if Noticeme not in Mods:    
                 logfile.write(f"[{ts}] {noticeme} PART\n")
+                push()
+                
+    await asyncio.sleep(int(CheckInterval))  # Check every defined interval seconds
 
 
 
@@ -327,45 +340,52 @@ async def run():
     chat.register_event(ChatEvent.MESSAGE, on_message)
     # listen to channel subscriptions
     chat.register_event(ChatEvent.SUB, on_sub)
-    # there are more events, you can view them all in this documentation
 
-    # you can directly register commands and their handlers, this will register the !reply command
-    chat.register_command('ping', ping)
-    chat.register_command("Andy", Andy)
-    chat.register_command("Friese", Fr226)
-    chat.register_command("Larsi", Larsi)
-    chat.register_command("Liebe", Liebe)
-    chat.register_command("Mo", Mo)
-    chat.register_command("Apex", Apex)
-    chat.register_command("Banger", banger)
-    chat.register_command("bye", bye)
-    chat.register_command("dc", discord)
-    chat.register_command("discord", discord)
-    chat.register_command("hl", hl)
-    chat.register_command("kohl", kohl)
-    chat.register_command("wargamer", kohl)
-    chat.register_command("nootnoot", noot)
-    chat.register_command("shader", shader)
-    chat.register_command("trinken", trinken)
-    chat.register_command("whatsapp", whatsapp)
-    chat.register_command("wa", whatsapp)
-    chat.register_command("lurk", lurk)
-    chat.register_command("unlurk", unlurk)
-    chat.register_command("pain", pain)
-    chat.register_command("aua", aua)
-    chat.register_command("test", test)
-    chat.register_command("shutdown", shutdown)
-    chat.register_command("noticeme", noticeme)
-    chat.register_command("pride", pride)
-    chat.register_command("commands", cmdlist)
-    chat.register_command("cmds", cmdlist)
-    chat.register_command("love", love)
-    
+
+    # you can directly register commands and their handlers
+    if UseChatCommands == "True":
+        chat.register_command('ping', ping)
+        chat.register_command("Andy", Andy)
+        chat.register_command("Friese", Fr226)
+        chat.register_command("Larsi", Larsi)
+        chat.register_command("Liebe", Liebe)
+        chat.register_command("Mo", Mo)
+        chat.register_command("Apex", Apex)
+        chat.register_command("Banger", banger)
+        chat.register_command("bye", bye)
+        chat.register_command("dc", discord)
+        chat.register_command("discord", discord)
+        chat.register_command("hl", hl)
+        chat.register_command("kohl", kohl)
+        chat.register_command("wargamer", kohl)
+        chat.register_command("nootnoot", noot)
+        chat.register_command("shader", shader)
+        chat.register_command("trinken", trinken)
+        chat.register_command("whatsapp", whatsapp)
+        chat.register_command("wa", whatsapp)
+        chat.register_command("lurk", lurk)
+        chat.register_command("unlurk", unlurk)
+        chat.register_command("pain", pain)
+        chat.register_command("aua", aua)
+        chat.register_command("test", test)
+        chat.register_command("shutdown", shutdown)
+        chat.register_command("noticeme", noticeme)
+        chat.register_command("pride", pride)
+        chat.register_command("commands", cmdlist)
+        chat.register_command("cmds", cmdlist)
+        chat.register_command("love", love)
+        if ShowDebugMessages == "True":
+            print("[DEBUG] Commands registered")
+    else:
+        if ShowDebugMessages == "True":
+            print("[DEBUG] Chat commands disabled, skipping command registration")
 
     
     
     # we are done with our setup, lets start this bot up!
     chat.start()
+    if ShowDebugMessages == "True":
+        print("[DEBUG] Bot strarted!")
 
 # run setup
 asyncio.run(main())
