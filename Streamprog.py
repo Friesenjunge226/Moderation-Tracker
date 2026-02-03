@@ -12,7 +12,6 @@ import requests
 import random
 
 
-print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
 CONFIG = "config.conf"  # Path to the config file
 
 # Get configuration from Config file
@@ -67,13 +66,14 @@ BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 BROADCASTER_ID = os.getenv("BROADCASTER_ID") # The Username of the channel the bot is running in
 
-if CheckForUpdatesOnStartup == "True":
-    response = requests.get(UpdateCheckURL)
-    if int(response) >= int(CurrentVersion):
-        for i in range(10):
-            print("[UPDATE] A new version of the Moderation Tracker is available. Please visit the GitHub page to download the latest version.")
-        UpdateAvailable = True
+#if CheckForUpdatesOnStartup == "True":
+#    response = requests.get(UpdateCheckURL)
+#    if int(response) >= int(CurrentVersion):
+#        for i in range(10):
+#            print("[UPDATE] A new version of the Moderation Tracker is available. Please visit the GitHub page to download the latest version.")
+#        UpdateAvailable = True
 
+print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
 
 async def main():
     
