@@ -10,50 +10,42 @@ import pygame
 from datetime import datetime, time
 import requests
 import random
+import configparser
 
+       
+config = configparser.ConfigParser()
+config.read("config.conf")
 
-CONFIG = "config.conf"  # Path to the config file
-
-# Get configuration from Config file
-with open(CONFIG, "r") as f:
-    f.readlines()
-    for line in f:
-        if "CurrentVersion" in line:
-            CurrentVersion = line.split(":")[1].strip()
-        elif "ShowDebugMessages" in line:
-            ShowDebugMessages = line.split(":")[1].strip()
-        elif "IsHoliday" in line:
-            IsHoliday = line.split(":")[1].strip()
-        elif "AutoLogoffTime":
-            AutoLogoffTime = line.split(":")[1].strip()
-        elif "UseLoggedLoveScores" in line:
-            UseLoggedLoveScores = line.split(":")[1].strip()
-        elif "PlayMessageSoundEffects" in line:
-            PlayMessageSoundEffects = line.split(":")[1].strip()
-            if PlayMessageSoundEffects == "True":
-                pygame.mixer.init()
-                if ShowDebugMessages == "True":
+# Read settings from config file
+settings = config['SETTINGS']
+CurrentVersion = settings.get('CurrentVersion')
+TARGET_CHANNEL = settings.get('TargetChannel')
+ShowDebugMessages = settings.getboolean('ShowDebugMessages')
+IsHoliday = settings.get('IsHoliday')
+AutoLogoffTime = settings.get('AutoLogoffTime')
+UseLoggedLoveScores = settings.getboolean('UseLoggedLoveScores')
+PlayMessageSoundEffects = settings.getboolean('PlayMessageSoundEffects')
+if PlayMessageSoundEffects == "True":
+        pygame.mixer.init()
+if ShowDebugMessages == "True":
                     print("[DEBUG] Sound effects initalized")
-            else:
-                if ShowDebugMessages == "True":
-                    print("[DEBUG] Sound effects disabled, Skipping Sound initalization")
-        elif "CheckForUpdatesOnStartup" in line:
-            CheckForUpdatesOnStartup = line.split(":")[1].strip()
-        elif "UpdateCheckURL" in line:
-            UpdateCheckURL = line.split(":")[1].strip()
-        elif "UseChatCommands" in line:
-            UseChatCommands = line.split(":")[1].strip()
-        elif "KeyFile" in line:
-            KeyFile = line.split(":")[1].strip()
-        elif "LoveScoreFile" in line:
-            LOVE_FILE = line.split(":")[1].strip()
-        elif "CheckInterval" in line:
-            CheckInterval = line.split(":")[1].strip()
-        elif "WatchedModerators" in line:
-            WATCHLIST = line.split(":")[1].strip().split(",")
-        elif "BotNames" in line:
-            BOTS = line.split(":")[1].strip().split(",")
+else:
+    if ShowDebugMessages == "True":
+        print("[DEBUG] Sound effects disabled, Skipping Sound initalization")
+
+CheckForUpdatesOnStartup = settings.getboolean('CheckForUpdatesOnStartup')
+UpdateCheckURL = settings.get('UpdateCheckURL')
+UseChatCommands = settings.getboolean('UseChatCommands')
+LOVE_FILE = settings.get("LoveScoreFile")
+CheckInterval = settings.getint("CheckInterval")
+WATCHLIST = settings.get("WatchedModerators").split(",")
+BOTS = settings.get('BotNames').split(',')
+KeyFile = settings.get('KeyFile')
+
             
+            
+            
+print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
             
 load_dotenv(dotenv_path=KeyFile)  # reads variables from a .env file and sets them in os.environ
 
@@ -66,14 +58,25 @@ BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 BROADCASTER_ID = os.getenv("BROADCASTER_ID") # The Username of the channel the bot is running in
 
-#if CheckForUpdatesOnStartup == "True":
-#    response = requests.get(UpdateCheckURL)
-#    if int(response) >= int(CurrentVersion):
-#        for i in range(10):
-#            print("[UPDATE] A new version of the Moderation Tracker is available. Please visit the GitHub page to download the latest version.")
-#        UpdateAvailable = True
+if CheckForUpdatesOnStartup == "True":
+    url = f"{UpdateCheckURL}"
+    response = requests.get(url)
 
-print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
+    LnOne = response.text.split('\n')[0]
+    LastestVersion = LnOne.split(':')[1].strip()
+    if response.status_code == 200:
+        if LastestVersion > CurrentVersion:
+            print(f"An update is available! Current version: {CurrentVersion}, Latest version: {LastestVersion}\n")
+            print("Please visit the GitHub repository to download the latest version.\n")
+        elif LastestVersion == CurrentVersion: 
+            if ShowDebugMessages == True:
+                print(f"You are using the latest version: {CurrentVersion}\n")
+        else:
+            if ShowDebugMessages == True:
+                print(f"You are using a newer version ({CurrentVersion}) than the latest release ({LastestVersion}).\n")
+    else:
+        print("Failed to check for updates. Status code:", response.status_code)
+
 
 async def main():
     
@@ -303,8 +306,8 @@ async def modcheck(logged_in_mods, Noticeme):
     while True:
         url = f"https://api.twitch.tv/helix/chat/chatters?broadcaster_id={BROADCASTER_ID}&moderator_id={BROADCASTER_ID}"
         headers = {
-    "Authorization": f"Bearer {TOKEN}",
-    "Client-ID": APP_ID
+        "Authorization": f"Bearer {TOKEN}",
+        "Client-ID": APP_ID
 }
         response = requests.get(url, headers=headers)
         data = response.json()
@@ -315,8 +318,7 @@ async def modcheck(logged_in_mods, Noticeme):
             if Noticeme not in Mods:    
                 logfile.write(f"[{ts}] {noticeme} PART\n")
                 push()
-                
-    await asyncio.sleep(int(CheckInterval))  # Check every defined interval seconds
+        await asyncio.sleep(int(CheckInterval))  # Check every defined interval seconds
 
 
 
