@@ -1,9 +1,6 @@
-os
-pytwitchapi==4.5.0
-asyncio
-subprocess
-dotenv
-pygame
-datetime
-requests
-random
+twitchAPI>=4.5.0
+python-dotenv>=1.2.1
+asyncio>=3.14.3
+datetime>=3.14.3
+requests>=2.32.5
+configparser>=7.2.0

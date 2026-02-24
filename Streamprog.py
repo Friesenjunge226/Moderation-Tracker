@@ -6,41 +6,51 @@ from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 import asyncio
 import subprocess
 from dotenv import load_dotenv
-import pygame
 from datetime import datetime, time
 import requests
 import random
 import configparser
+import winsound
 
        
 config = configparser.ConfigParser()
 config.read("config.conf")
 
 # Read settings from config file
-settings = config['SETTINGS']
-CurrentVersion = settings.get('CurrentVersion')
-TARGET_CHANNEL = settings.get('TargetChannel')
-ShowDebugMessages = settings.getboolean('ShowDebugMessages')
-IsHoliday = settings.get('IsHoliday')
-AutoLogoffTime = settings.get('AutoLogoffTime')
-UseLoggedLoveScores = settings.getboolean('UseLoggedLoveScores')
-PlayMessageSoundEffects = settings.getboolean('PlayMessageSoundEffects')
-if PlayMessageSoundEffects == "True":
-        pygame.mixer.init()
-if ShowDebugMessages == "True":
-                    print("[DEBUG] Sound effects initalized")
-else:
-    if ShowDebugMessages == "True":
-        print("[DEBUG] Sound effects disabled, Skipping Sound initalization")
 
-CheckForUpdatesOnStartup = settings.getboolean('CheckForUpdatesOnStartup')
-UpdateCheckURL = settings.get('UpdateCheckURL')
-UseChatCommands = settings.getboolean('UseChatCommands')
-LOVE_FILE = settings.get("LoveScoreFile")
-CheckInterval = settings.getint("CheckInterval")
-WATCHLIST = settings.get("WatchedModerators").split(",")
-BOTS = settings.get('BotNames').split(',')
-KeyFile = settings.get('KeyFile')
+
+CurrentVersion = config["SETTINGS"]["CurrentVersion"].strip()
+TARGET_CHANNEL = config["SETTINGS"]["TargetChannel"]
+ShowDebugMessages = config["SETTINGS"].getboolean("ShowDebugMessages")
+IsHoliday = config["SETTINGS"]["IsHoliday"]
+AutoLogoffTime = config["SETTINGS"]["AutoLogoffTime"]
+UseLoggedLoveScores = config["SETTINGS"].getboolean("UseLoggedLoveScores")
+PlayMessageSoundEffects = config["SETTINGS"]["PlayMessageSoundEffects"]
+CheckForUpdatesOnStartup = config["SETTINGS"].getboolean("CheckForUpdatesOnStartup")
+UpdateCheckURL = config["SETTINGS"]["UpdateCheckURL"]
+UseChatCommands = config["SETTINGS"].getboolean("UseChatCommands")
+LOVE_FILE = config["SETTINGS"]["LoveScoreFile"]
+CheckInterval = config["SETTINGS"].getint("CheckInterval")
+WATCHLIST = config["SETTINGS"]["WatchedModerators"].split(",")
+BOTS = config["SETTINGS"]["BotNames"].split(',')
+KeyFile = config["SETTINGS"]["KeyFile"]
+
+if ShowDebugMessages == True:
+    print(f"[DEBUG] {CurrentVersion}")
+    print(f"[DEBUG] {TARGET_CHANNEL}")
+    print(f"[DEBUG] {ShowDebugMessages}")
+    print(f"[DEBUG] {IsHoliday}")
+    print(f"[DEBUG] {AutoLogoffTime}")
+    print(f"[DEBUG] {UseLoggedLoveScores}")
+    print(f"[DEBUG] {PlayMessageSoundEffects}")
+    print(f"[DEBUG] {CheckForUpdatesOnStartup}")
+    print(f"[DEBUG] {UpdateCheckURL}")
+    print(f"[DEBUG] {UseChatCommands}")
+    print(f"[DEBUG] {LOVE_FILE}")
+    print(f"[DEBUG] {CheckInterval}")
+    print(f"[DEBUG] {WATCHLIST}")
+    print(f"[DEBUG] {BOTS}")
+    print(f"[DEBUG] {KeyFile}")
 
             
             
@@ -58,22 +68,20 @@ BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
 LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
 BROADCASTER_ID = os.getenv("BROADCASTER_ID") # The Username of the channel the bot is running in
 
-if CheckForUpdatesOnStartup == "True":
+if CheckForUpdatesOnStartup == True:
     url = f"{UpdateCheckURL}"
     response = requests.get(url)
 
-    LnOne = response.text.split('\n')[0]
-    LastestVersion = LnOne.split(':')[1].strip()
+    LnOne = response.text.split('\n')[1]
+    LastestVersion = LnOne.split('=')[0].strip()
+    if ShowDebugMessages == True:
+        print(f"Latest version: {str(LastestVersion)}, Current version: {CurrentVersion}")
     if response.status_code == 200:
-        if LastestVersion > CurrentVersion:
-            print(f"An update is available! Current version: {CurrentVersion}, Latest version: {LastestVersion}\n")
+        if str(LastestVersion) != str(CurrentVersion):
+            print(f"An update is available! Current version: {str(CurrentVersion)}, Latest version: {LastestVersion}\n")
             print("Please visit the GitHub repository to download the latest version.\n")
-        elif LastestVersion == CurrentVersion: 
-            if ShowDebugMessages == True:
-                print(f"You are using the latest version: {CurrentVersion}\n")
         else:
-            if ShowDebugMessages == True:
-                print(f"You are using a newer version ({CurrentVersion}) than the latest release ({LastestVersion}).\n")
+            print("You are running the latest version.")
     else:
         print("Failed to check for updates. Status code:", response.status_code)
 
@@ -85,14 +93,14 @@ async def main():
     task1 = asyncio.create_task(run()) # Start the Chatbot
 
     await asyncio.gather(task1) # Run the things specified above
-    if ShowDebugMessages == "True":
+    if ShowDebugMessages == True:
         print("[DEBUG] Main tasks started")
 
 async def push():
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
     subprocess.run(["git", "push", "origin", "main"])
-    if ShowDebugMessages == "True":
+    if ShowDebugMessages == True:
         print("[DEBUG] Changes pushed to remote repository")
 
 
@@ -108,9 +116,8 @@ async def on_ready(ready_event: EventData):
 async def on_message(msg: ChatMessage):
     if not msg.user.name in BOTS:
         print(f'[TwitchAPI] in {msg.room.name}, {msg.user.name} said: {msg.text}')
-        if PlayMessageSoundEffects == "True":
-            pygame.mixer.music.load("yes.mp3")
-            pygame.mixer.music.play()
+        if PlayMessageSoundEffects == True:
+            winsound.PlaySound("yes.wav", winsound.SND_FILENAME)
 
     
 
@@ -124,7 +131,8 @@ async def on_sub(sub: ChatSub):
 
 
 async def ping(cmd: ChatCommand):
-    await cmd.reply('pong')
+    if cmd.user.name in WATCHLIST or cmd.user.name == TARGET_CHANNEL:
+        await cmd.reply('pong')
 
 async def Andy(cmd: ChatCommand):
     if cmd.user.name == "misterxpd_andy":
@@ -207,8 +215,7 @@ async def shutdown(cmd: ChatCommand):
         
         # You an add any additional cleanup code here
 
-        pygame.mixer.init()
-        pygame.mixer.stop()
+
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         subprocess.run(["git", "commit", "-m", f"Auto update {ts}"])
         subprocess.run(["git", "push", "origin", "main"])
@@ -285,7 +292,7 @@ async def love(cmd: ChatCommand):
     scores = load_love_scores()
 
     # Bereits vorhanden -> aus Datei lesen
-    if UseLoggedLoveScores == "True":
+    if UseLoggedLoveScores == True:
         if pair in scores:
             value = scores[pair]
         else:
@@ -345,7 +352,7 @@ async def run():
 
 
     # you can directly register commands and their handlers
-    if UseChatCommands == "True":
+    if UseChatCommands == True:
         chat.register_command('ping', ping)
         chat.register_command("Andy", Andy)
         chat.register_command("Friese", Fr226)
@@ -376,17 +383,17 @@ async def run():
         chat.register_command("commands", cmdlist)
         chat.register_command("cmds", cmdlist)
         chat.register_command("love", love)
-        if ShowDebugMessages == "True":
+        if ShowDebugMessages == True:
             print("[DEBUG] Commands registered")
     else:
-        if ShowDebugMessages == "True":
+        if ShowDebugMessages == True:
             print("[DEBUG] Chat commands disabled, skipping command registration")
 
     
     
     # we are done with our setup, lets start this bot up!
     chat.start()
-    if ShowDebugMessages == "True":
+    if ShowDebugMessages == True:
         print("[DEBUG] Bot strarted!")
 
 # run setup
