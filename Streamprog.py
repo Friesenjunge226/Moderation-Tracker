@@ -12,7 +12,6 @@ import random
 import configparser
 import winsound
 
-       
 config = configparser.ConfigParser()
 config.read("config.conf")
 
@@ -52,16 +51,17 @@ if ShowDebugMessages == True:
     print(f"[DEBUG] {BOTS}")
     print(f"[DEBUG] {KeyFile}")
 
-            
-            
-            
+    # Define Variables
+    noticeme = ""
+    logged_in_mods = []
+
 print(f"Chatbot and Moderator Tracker for the channel {TARGET_CHANNEL}")
             
 load_dotenv(dotenv_path=KeyFile)  # reads variables from a .env file and sets them in os.environ
 
 APP_ID = os.getenv("APP_ID") # ID of ther bot
 APP_SECRET = os.getenv("APP_SECRET") # Token of the bot
-USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT] # Permissions the chatbot should have
+USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT, AuthScope.WHISPERS_READ, AuthScope.WHISPERS_EDIT] # Permissions the chatbot should have
 TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
@@ -75,13 +75,13 @@ if CheckForUpdatesOnStartup == True:
     LnOne = response.text.split('\n')[1]
     LastestVersion = LnOne.split('=')[0].strip()
     if ShowDebugMessages == True:
-        print(f"Latest version: {str(LastestVersion)}, Current version: {CurrentVersion}")
+        print(f"Latest version: {LastestVersion}, Current version: {CurrentVersion}")
     if response.status_code == 200:
-        if str(LastestVersion) != str(CurrentVersion):
-            print(f"An update is available! Current version: {str(CurrentVersion)}, Latest version: {LastestVersion}\n")
-            print("Please visit the GitHub repository to download the latest version.\n")
-        else:
+        if str(LastestVersion) == str(CurrentVersion):
             print("You are running the latest version.")
+        else:
+            print(f"An update is available! Current version: {CurrentVersion}, Latest version: {LastestVersion}\n")
+            print("Please visit the GitHub repository to download the latest version.\n")
     else:
         print("Failed to check for updates. Status code:", response.status_code)
 
@@ -162,6 +162,11 @@ async def banger(cmd: ChatCommand):
     
 async def bye(cmd: ChatCommand):
     await cmd.reply("peepoBye peepoBye peepoBye")
+    if cmd.user.name in logged_in_mods or cmd.user.name in noticeme:
+        with open(LOGFILE, "a") as logfile:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logfile.write(f"[{ts}] {cmd.user.name} PART\n")
+            push()
     
 async def discord(cmd: ChatCommand):
     await cmd.reply("Trete gerne meinem Community Discord Server bei, um keinen Stream mehr zu verpassen -> https://discord.com/invite/b77hdjUuyX")
@@ -326,6 +331,11 @@ async def modcheck(logged_in_mods, Noticeme):
                 logfile.write(f"[{ts}] {noticeme} PART\n")
                 push()
         await asyncio.sleep(int(CheckInterval))  # Check every defined interval seconds
+        
+async def ModCheck(logged_in_mods, Noticeme):
+    """This function is called to start the periodic moderator status checks"""
+    
+
 
 
 
@@ -394,7 +404,7 @@ async def run():
     # we are done with our setup, lets start this bot up!
     chat.start()
     if ShowDebugMessages == True:
-        print("[DEBUG] Bot strarted!")
+        print("[DEBUG] Bot started!")
 
 # run setup
 asyncio.run(main())
