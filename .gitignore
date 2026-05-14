@@ -215,3 +215,5 @@ Countdown.py
 test.py
 love_scores.txt
 statistics.stat
+./tmp/*
+/tmp

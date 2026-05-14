@@ -33,6 +33,7 @@ CheckInterval = config["SETTINGS"].getint("CheckInterval")
 WATCHLIST = config["SETTINGS"]["WatchedModerators"].split(",")
 BOTS = config["SETTINGS"]["BotNames"].split(',')
 KeyFile = config["SETTINGS"]["KeyFile"]
+USER_SCOPE = config["SETTINGS"]["UserScopes"].split(",")
 
 if ShowDebugMessages == True:
     print(f"[DEBUG] {CurrentVersion}")
@@ -50,7 +51,7 @@ if ShowDebugMessages == True:
     print(f"[DEBUG] {WATCHLIST}")
     print(f"[DEBUG] {BOTS}")
     print(f"[DEBUG] {KeyFile}")
-
+    print(f"[DEBUG] {USER_SCOPE}")
     # Define Variables
     noticeme = ""
     logged_in_mods = []
@@ -61,12 +62,10 @@ load_dotenv(dotenv_path=KeyFile)  # reads variables from a .env file and sets th
 
 APP_ID = os.getenv("APP_ID") # ID of ther bot
 APP_SECRET = os.getenv("APP_SECRET") # Token of the bot
-USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT, AuthScope.WHISPERS_READ, AuthScope.WHISPERS_EDIT] # Permissions the chatbot should have
-TARGET_CHANNEL = os.getenv("TARGET_CHANNEL") # Target channel
 TOKEN = os.getenv("TOKEN") # The access token of the IRC connection
 BOTNAME = os.getenv("BOTNAME") # The Name of the bot using the IRC Connection
-LOGFILE = os.getenv("LOGFILE") # The file the Script writes to
-BROADCASTER_ID = os.getenv("BROADCASTER_ID") # The Username of the channel the bot is running in
+BROADCASTER_ID = os.getenv("BROADCASTER_ID") # The User ID of the channel the bot is running on. You can find this by using a Twitch API endpoint or by using a tool like Twitch Inspector.
+YTMD_TOKEN = os.getenv("YTMD_TOKEN") # The access token for the YTMDesktop API, only needed if you want to use the music features of the bot
 
 if CheckForUpdatesOnStartup == True:
     url = f"{UpdateCheckURL}"
@@ -82,8 +81,18 @@ if CheckForUpdatesOnStartup == True:
         else:
             print(f"An update is available! Current version: {CurrentVersion}, Latest version: {LastestVersion}\n")
             print("Please visit the GitHub repository to download the latest version.\n")
+    elif response.status_code == 404:
+        print("Update check URL not found (404). Please check the UpdateCheckURL in the config file.")
+    elif response.status_code == 500:
+        print("Internal server error (500) when checking for updates. Please try again later.")
     else:
-        print("Failed to check for updates. Status code:", response.status_code)
+        print("Failed to check for updates with the response code", response.status_code)
+        print("More information: can be found on the Wikipedia article about HTTP response status codes: https://en.wikipedia.org/wiki/List_of_HTTP_status_codes")
+        if ShowDebugMessages == True:
+            print(f"[DEBUG] Update check response: {response.text}")
+else:
+    if ShowDebugMessages == True:
+        print("[DEBUG] Update check on startup is disabled, skipping update check")
 
 
 async def main():
@@ -112,7 +121,7 @@ async def on_ready(ready_event: EventData):
     # bot init
 
 
-# this will be called whenever a message in a channel was send by either the bot OR another user
+# this will be called whenever a message in a channel was sent by either the bot OR another user
 async def on_message(msg: ChatMessage):
     if not msg.user.name in BOTS:
         print(f'[TwitchAPI] in {msg.room.name}, {msg.user.name} said: {msg.text}')
