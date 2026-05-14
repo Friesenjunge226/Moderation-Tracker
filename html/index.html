@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Twitch Moderation Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    body {
+        background: #0e0e10;
+        color: #efeff1;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+    }
+    h1 {
+        color: #9146ff;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-gap: 25px;
+        max-width: 1300px;
+        margin: auto;
+    }
+    .card {
+        background: #18181b;
+        border: 1px solid #2c2c2f;
+        padding: 20px;
+        border-radius: 12px;
+    }
+    .card h2 {
+        margin-top: 0;
+        color: #bf94ff;
+    }
+    .summary-box {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-gap: 20px;
+    }
+    .mod-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+.mod-row::-webkit-scrollbar {
+    height: 8px;
+}
+
+.mod-row::-webkit-scrollbar-thumb {
+    background: #9146ff;
+    border-radius: 10px;
+}
+
+</style>
+</head>
+<body>
+
+<h1>Twitch Moderation Tracker</h1>
+    
+<div class="card mod-row" id="summary"></div>
+<br>
+<div class="container">
+    <div class="card">
+        <h2>Zeit pro Moderator</h2>
+        <canvas id="pieChart"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>Genauigkeit der Angaben</h2>
+        <canvas id="barChart"></canvas>
+    </div>
+</div>
+
+<script>
+const LOG_URL = "https://raw.githubusercontent.com/Friesenjunge226/Moderation-Tracker/main/joins.log";
+
+async function loadLog() {
+    const res = await fetch(LOG_URL);
+    const text = await res.text();
+    return text.trim().split("\n");
+}
+
+function parseLog(lines) {
+    let sessions = {};
+    let onlineSince = {};
+    let lastStatus = {};
+
+    for (let mod of ["mo_ju_rsck", "yinnox98", "meliorasisback", "LsGmer"]) {
+        sessions[mod] = 0;
+        onlineSince[mod] = null;
+        lastStatus[mod] = "OFFLINE"; 
+    }
+
+    for (let line of lines) {
+        let match = line.match(/\[(.*?)\] (.*?) (JOIN|PART)/);
+        if (!match) continue;
+
+        let ts = new Date(match[1]);
+        let mod = match[2];
+        let ev = match[3];
+
+        if (!sessions[mod]) sessions[mod] = 0;
+
+        // Status sofort setzen
+        lastStatus[mod] = ev === "JOIN" ? "ONLINE" : "OFFLINE";
+
+        if (ev === "JOIN") {
+            onlineSince[mod] = ts;
+        } else if (ev === "PART" && onlineSince[mod]) {
+            sessions[mod] += (ts - onlineSince[mod]) / 1000;
+            onlineSince[mod] = null;
+        }
+    }
+
+    return { sessions, lastStatus };
+}
+
+function formatTime(seconds) {
+    let h = Math.floor(seconds / 3600);
+    let m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+}
+
+function updateSummary(data) {
+    const { sessions, lastStatus } = data;
+    const el = document.getElementById("summary");
+    el.innerHTML = "";
+
+    for (const mod in sessions) {
+        const status = lastStatus[mod];
+        const color = status === "ONLINE" ? "#00ff88" : "#ff5555";
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+            <h2>${mod}</h2>
+            <p>Gesamte Zeit: <b>${formatTime(sessions[mod])}</b></p>
+            <p>Status: <b style="color:${color}">${status}</b></p>
+        `;
+
+        el.appendChild(card);
+    }
+}
+
+
+function buildCharts(sessions) {
+    const labels = Object.keys(sessions);
+    const values = Object.values(sessions);
+
+    // PIE CHART – Zeit pro Mod
+    new Chart(document.getElementById("pieChart"), {
+        type: "pie",
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: ["#00ff00", "#00B2FF", "#FF4F7B", "#9146ff"]
+            }]
+        },
+        options: {
+            plugins: { legend: { labels: { color: "#fff" }}}
+        }
+    });
+
+    // BAR CHART – Gerechtigkeit
+    let max = Math.max(...values) || 1;
+    let balanced = values.map(v => (v / max) * 100);
+
+    new Chart(document.getElementById("barChart"), {
+        type: "bar",
+        data: {
+            labels,
+            datasets: [{
+                label: "Prozentanteil",
+                data: balanced,
+                backgroundColor: ["#9146FF", "#00B2FF", "#FF4F7B"]
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: "#fff" },
+                    grid: { color: "#444" }
+                },
+                x: { ticks: { color: "#fff" } }
+            }
+        }
+    });
+}
+
+async function init() {
+    const lines = await loadLog();
+    const data = parseLog(lines);
+
+    updateSummary(data);
+    buildCharts(data.sessions); 
+}
+
+init();
+</script>
+
+</body>
+</html>
